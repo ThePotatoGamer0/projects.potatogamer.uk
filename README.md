@@ -1,16 +1,53 @@
-# React + Vite
+# 🥔 projects.potatogamer.uk
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The central monorepo for all projects hosted at [projects.potatogamer.uk](https://projects.potatogamer.uk). Built with a modern React and Vite stack, organized as an efficient npm workspace.
 
-Currently, two official plugins are available:
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## 🏗️ Architecture
 
-## React Compiler
+This repository uses a monorepo structure to manage multiple applications and shared logic in one place.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 📦 Apps
+| Name | Description | Tech Stack | Status |
+| :--- | :--- | :--- | :--- |
+| **`apps/time`** | A high-performance, customizable school timetable and countdown app with dynamic themes (including the secret "Stars" theme). | React, Vite, GSAP | Live 🟢 |
 
-## Expanding the ESLint configuration
+### 🛠️ Packages (Planned)
+| Name | Description |
+| :--- | :--- |
+| **`packages/ui`** | Shared React components and universal loaders used across the ecosystem. |
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## 💻 Tech Stack & Infrastructure
+
+* **Frontend:** HTML, CSS, JavaScript, React, Vite.
+* **Languages:** PHP, Python (for backend services and automation).
+* **Home Lab:** Hosted and tested on a **Raspberry Pi 5 (16GB RAM)** with a **1TB NVMe SSD** running **Pi OS Lite**.
+* **Development:** Primary development performed on **Windows 11**.
+
+## 🚀 Local Development
+
+To run this workspace locally, ensure you have **Node.js** and **fnm** (or npm) installed.
+
+1.  **Clone the repository**
+    ```powershell
+    git clone [https://github.com/thepotatogamer0/projects.potatogamer.uk.git](https://github.com/thepotatogamer0/projects.potatogamer.uk.git)
+    cd projects.potatogamer.uk
+    ```
+
+2.  **Install dependencies**
+    This installs all packages for the root and every app in the `apps/` folder.
+    ```powershell
+    npm install
+    ```
+
+3.  **Start development mode**
+    Run all projects simultaneously:
+    ```powershell
+    npm run dev
+    ```
+
+## 📄 License
+This project is open-source and available under the **MIT License**. You are free to use, modify, and distribute the code, provided that original credit is given to the author. See the [LICENSE](./LICENSE) file for full details.
+
+Created and maintained by **potatogamer**.

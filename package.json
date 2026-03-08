@@ -1,5 +1,6 @@
 {
-  "name": "potatogamer-monorepo",
+  "name": "projects.potatogamer.uk",
+  "description": "The monorepo for all projects hosted at projects.potatogamer.uk. Built with Vite, in React.",
   "private": true,
   "workspaces": [
     "apps/*",
