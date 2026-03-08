@@ -1,0 +1,60 @@
+import { useState, useEffect } from 'react';
+import './App.css';
+
+function App() {
+  const [text, setText] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [wordIndex, setWordIndex] = useState(0);
+  const [delta, setDelta] = useState(150);
+
+  const words = ["Projects", "Ideas", "Works"];
+  const waitTime = 2000;
+
+  useEffect(() => {
+    let ticker = setInterval(() => {
+      tick();
+    }, delta);
+
+    return () => clearInterval(ticker);
+  }, [text, delta]);
+
+  const tick = () => {
+    let i = wordIndex % words.length;
+    let fullWord = words[i];
+    let updatedText = isDeleting 
+      ? fullWord.substring(0, text.length - 1) 
+      : fullWord.substring(0, text.length + 1);
+
+    setText(updatedText);
+
+    if (isDeleting) {
+      setDelta(100);
+    }
+
+    if (!isDeleting && updatedText === fullWord) {
+      setIsDeleting(true);
+      setDelta(waitTime);
+    } else if (isDeleting && updatedText === '') {
+      setIsDeleting(false);
+      setWordIndex(wordIndex + 1);
+      setDelta(150);
+    }
+  };
+
+  return (
+    <div className="home-container">
+      <div className="brand-corner">POTATOGAMER.UK</div>
+      
+      <div className="main-content">
+        <h1>Building <span className="typewriter">{text}</span><span className="cursor"></span></h1>
+        
+        <div className="links">
+          <a href="https://time.potatogamer.uk">Time App</a>
+          <a href="https://github.com/thepotatogamer0" target="_blank" rel="noreferrer">GitHub</a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default App;
