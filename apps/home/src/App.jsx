@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Clock, Github } from 'lucide-react';
 import './App.css';
 
 function App() {
@@ -11,10 +12,7 @@ function App() {
   const waitTime = 2000;
 
   useEffect(() => {
-    let ticker = setInterval(() => {
-      tick();
-    }, delta);
-
+    let ticker = setInterval(() => { tick(); }, delta);
     return () => clearInterval(ticker);
   }, [text, delta]);
 
@@ -27,10 +25,7 @@ function App() {
 
     setText(updatedText);
 
-    if (isDeleting) {
-      setDelta(100);
-    }
-
+    if (isDeleting) setDelta(100);
     if (!isDeleting && updatedText === fullWord) {
       setIsDeleting(true);
       setDelta(waitTime);
@@ -43,14 +38,28 @@ function App() {
 
   return (
     <div className="home-container">
-      <div className="brand-corner">POTATOGAMER.UK</div>
-      
-      <div className="main-content">
-        <h1>Building <span className="typewriter">{text}</span><span className="cursor"></span></h1>
-        
-        <div className="links">
-          <a href="https://time.potatogamer.uk">Time App</a>
-          <a href="https://github.com/thepotatogamer0" target="_blank" rel="noreferrer">GitHub</a>
+      <p className="brand-corner">potatogamer.uk</p>
+
+      <div className="container">
+        <div className="header-wrapper">
+          <div className="sub-header">All of ThePotatoGamers...</div>
+          <div className="title-container">
+            <h1>
+              <span>{text}</span>
+              <span className="cursor">|</span>
+            </h1>
+          </div>
+          
+          <div className="links">
+            <a href="/time" className="btn">
+              <Clock size={18} />
+              <span>Time App</span>
+            </a>
+            <a href="https://github.com/thepotatogamer0" target="_blank" rel="noreferrer" className="btn">
+              <Github size={18} />
+              <span>GitHub</span>
+            </a>
+          </div>
         </div>
       </div>
     </div>
