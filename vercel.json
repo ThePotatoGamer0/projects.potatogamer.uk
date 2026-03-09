@@ -1,8 +1,16 @@
 {
   "rewrites": [
     {
-      "source": "/time/(.*)",
-      "destination": "/time/$1"
+      "source": "/time",
+      "destination": "/apps/time/index.html"
+    },
+    {
+      "source": "/time/:path*",
+      "destination": "/apps/time/:path*"
+    },
+    {
+      "source": "/:path*",
+      "destination": "/apps/home/:path*"
     }
   ]
 }
