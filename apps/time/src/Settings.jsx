@@ -1,349 +1,315 @@
-// src/Settings.jsx
-import { useState, useEffect, useRef } from 'react';
-import iro from '@jaames/iro';
+// src/App.jsx
+import { useEffect, useState, useRef, useCallback } from 'react';
+import gsap from 'gsap';
+import { PERIODS_LONG, PERIODS_SHORT } from './constants/periods';
 import { USER_TIMETABLES } from './constants/users';
-import { LoadingScreen } from '@projects/ui';
-import './App.css';
+import Stars from './Stars';
+import { LoadingScreen } from '@projects/ui'; // Added import
+import './App.css'; 
 
-export default function Settings({ navigate }) {
+// Helper functions kept outside the component to prevent recreation
+function timeToMins(t) {
+    const [h, m] = t.split(':').map(Number);
+    return h * 60 + m;
+}
+
+function formatDiff(totalMs, showMs = false) {
+    if (totalMs <= 0) return showMs ? "00:00:00.000" : "00:00:00";
+    const totalSeconds = Math.floor(totalMs / 1000);
+    const ms = Math.floor(totalMs % 1000);
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = Math.floor(totalSeconds % 60);
+    let base = `${h > 0 ? h + ':' : ''}${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    return showMs ? `${base}.${ms.toString().padStart(3, '0')}` : base;
+}
+
+// 1. Accept the `Maps` function as a prop from main.jsx
+export default function App({ navigate }) {
     const params = new URLSearchParams(window.location.search);
-    
-    // Check if the app has already loaded in this browser session
+    const isStarsTheme = params.get('t') === 'stars';
+
+    // Added Loading States
     const [isLoading, setIsLoading] = useState(!window.__TIME_APP_LOADED__);
     const [isExiting, setIsExiting] = useState(false);
 
-    // UI State
-    const [activeTab, setActiveTab] = useState('theme');
-    const [applyStatus, setApplyStatus] = useState(0); 
+    // React State for things that update infrequently
+    const [statusLabel, setStatusLabel] = useState("Status");
+    const [previewLabel, setPreviewLabel] = useState("");
+    const [isDevMode, setIsDevMode] = useState(false);
     
-    // Settings State
-    const [preset, setPreset] = useState(params.get('t') || 'custom');
-    const [bgColor, setBgColor] = useState(`#${params.get('bg') || '000000'}`);
-    const [txtColor, setTxtColor] = useState(`#${params.get('txt') || 'ffffff'}`);
-    const [selectedUser, setSelectedUser] = useState(params.get('u') || 'user1');
-    const [animLevel, setAnimLevel] = useState(params.get('anim') || 'full');
-    
-    // Dev State
-    const [devTime, setDevTime] = useState(params.get('devt') || '');
-    const [devDay, setDevDay] = useState(params.get('devd') || '');
-    const [devUnlocked, setDevUnlocked] = useState(params.get('dev') === '1');
-    const [starsUnlocked, setStarsUnlocked] = useState(params.get('t') === 'stars');
+    // Mutable refs for tracking fast-changing data without causing React re-renders
+    const timeOffsetRef = useRef(0);
+    const precisionRef = useRef({
+        'time-until-class': false,
+        'time-until-period': false,
+        'time-until-day': false
+    });
+    const lastStringsRef = useRef({
+        'time-until-class': '',
+        'time-until-period': '',
+        'time-until-day': ''
+    });
 
-    // Refs
-    const bgWheelRef = useRef(null);
-    const txtWheelRef = useRef(null);
-    const bgPicker = useRef(null);
-    const txtPicker = useRef(null);
-    const themeClickCount = useRef(0);
-    const devClickCount = useRef(0);
+    // DOM Refs to target the timer elements directly
+    const classTimerRef = useRef(null);
+    const periodTimerRef = useRef(null);
+    const dayTimerRef = useRef(null);
 
-    // Entry Transition Effect (Only runs if not already loaded)
+    // Added Entry Transition Effect
     useEffect(() => {
         if (!window.__TIME_APP_LOADED__) {
             const timer = setTimeout(() => {
                 setIsLoading(false);
-                window.__TIME_APP_LOADED__ = true; // Mark as loaded for future internal navigation
+                window.__TIME_APP_LOADED__ = true;
             }, 800);
             return () => clearTimeout(timer);
         }
     }, []);
 
-    // Initialize Color Pickers
+    // Added helper for bridging to other apps (like going back to Home)
+    const handleExternalNavigation = (e, url) => {
+        e.preventDefault();
+        setIsExiting(true);
+        setTimeout(() => {
+            window.location.href = url;
+        }, 400);
+    };
+
+    // Initial Setup (Time Sync & Themes)
     useEffect(() => {
-        if (!bgWheelRef.current || !txtWheelRef.current) return;
+        const urlParams = new URLSearchParams(window.location.search);
+        
+        // Sync Time - CORS-friendly API with a silent fallback
+        const syncTime = async () => {
+            try {
+                const start = Date.now();
+                const response = await fetch('https://timeapi.io/api/Time/current/zone?timeZone=UTC');
+                if (response.ok) {
+                    const data = await response.json();
+                    const serverTime = new Date(data.dateTime).getTime();
+                    timeOffsetRef.current = serverTime - (start + (Date.now() - start) / 2);
+                }
+            } catch (e) { 
+                console.log("Using local system time (API sync skipped)."); 
+            }
+        };
+        syncTime();
 
-        bgWheelRef.current.innerHTML = '';
-        txtWheelRef.current.innerHTML = '';
+        // Theme Init
+        const theme = urlParams.get('t');
+        const bg = urlParams.get('bg');
+        const txt = urlParams.get('txt');
+        const presets = {
+            dark: { bg: '000000', txt: 'ffffff' },
+            light: { bg: 'ffffff', txt: '000000' },
+            luxury: { bg: '1a2e35', txt: 'ffcc00' },
+            stars: { bg: '020111', txt: 'ffffff' }
+        };
 
-        bgPicker.current = new iro.ColorPicker(bgWheelRef.current, { width: 150, color: bgColor });
-        txtPicker.current = new iro.ColorPicker(txtWheelRef.current, { width: 150, color: txtColor });
+        if (theme && presets[theme]) {
+            document.documentElement.style.setProperty('--bg-color', `#${presets[theme].bg}`);
+            document.documentElement.style.setProperty('--text-main', `#${presets[theme].txt}`);
+            if (theme === 'stars') document.body.classList.add('theme-stars');
+        } else if (theme === 'custom' && bg && txt) {
+            document.documentElement.style.setProperty('--bg-color', `#${bg}`);
+            document.documentElement.style.setProperty('--text-main', `#${txt}`);
+        }
 
-        bgPicker.current.on('color:change', (color) => {
-            setPreset('custom');
-            setBgColor(color.hexString);
-        });
-
-        txtPicker.current.on('color:change', (color) => {
-            setPreset('custom');
-            setTxtColor(color.hexString);
-        });
+        if (urlParams.get('devt') || urlParams.get('devd')) {
+            setIsDevMode(true);
+        }
     }, []);
 
-    const handleTitleClick = () => {
-        devClickCount.current += 1;
-        if (devClickCount.current === 5) {
-            setDevUnlocked(true);
-            alert("Developer Mode Unlocked! 🛠️");
-        }
-    };
-
-    const handleThemeTabClick = () => {
-        setActiveTab('theme');
-        themeClickCount.current += 1;
-        if (themeClickCount.current === 7 && !starsUnlocked) {
-            setStarsUnlocked(true);
-            setPreset('stars');
-            alert("Achievement Unlocked: Space Traveler! 🚀");
-        }
-    };
-
-    const handleOtherTabClick = (tab) => {
-        setActiveTab(tab);
-        themeClickCount.current = 0; 
-    };
-
-    const saveSettings = () => {
-        const newParams = new URLSearchParams();
+    // Performant GSAP Update Function
+    const updateRollingTimer = useCallback((domRef, newStr, id, animMode) => {
+        const container = domRef.current;
+        if (!container) return;
         
-        newParams.set('bg', bgColor.replace('#', ''));
-        newParams.set('txt', txtColor.replace('#', ''));
-        newParams.set('t', preset);
-        newParams.set('u', selectedUser);
-        
-        if (animLevel !== 'full') newParams.set('anim', animLevel);
-        if (devUnlocked) newParams.set('dev', '1');
-        if (devTime) newParams.set('devt', devTime);
-        if (devDay) newParams.set('devd', devDay);
+        const oldStr = lastStringsRef.current[id];
+        if (oldStr === newStr) return;
 
-        const newURL = `${window.location.pathname}?${newParams.toString()}`;
-        window.history.pushState({}, '', newURL);
+        if (precisionRef.current[id] || animMode !== 'full') {
+            container.innerText = newStr;
+            lastStringsRef.current[id] = newStr;
+            return;
+        }
 
-        // --- THE DOM CLEANUP FIX ---
-        // Force the browser to paint the new colors immediately and remove old classes
-        if (preset === 'stars') {
-            document.body.classList.add('theme-stars');
-            document.documentElement.style.setProperty('--bg-color', '#020111');
-            document.documentElement.style.setProperty('--text-main', '#ffffff');
-        } else {
-            // Wash off the permanent tattoo!
-            document.body.classList.remove('theme-stars'); 
-            
-            const presetsMap = {
-                dark: { bg: '#000000', txt: '#ffffff' },
-                light: { bg: '#ffffff', txt: '#000000' },
-                luxury: { bg: '#1a2e35', txt: '#ffcc00' }
-            };
+        if (container.children.length !== newStr.length) {
+            container.innerHTML = '';
+            [...newStr].forEach(char => {
+                const span = document.createElement('span');
+                span.style.display = 'inline-block';
+                span.innerText = char;
+                container.appendChild(span);
+            });
+        }
 
-            if (preset === 'custom') {
-                document.documentElement.style.setProperty('--bg-color', bgColor);
-                document.documentElement.style.setProperty('--text-main', txtColor);
-            } else if (presetsMap[preset]) {
-                document.documentElement.style.setProperty('--bg-color', presetsMap[preset].bg);
-                document.documentElement.style.setProperty('--text-main', presetsMap[preset].txt);
+        [...newStr].forEach((char, i) => {
+            const span = container.children[i];
+            if (span.innerText !== char) {
+                gsap.to(span, {
+                    y: -15,
+                    opacity: 0,
+                    duration: 0.15,
+                    onComplete: () => {
+                        span.innerText = char;
+                        gsap.fromTo(span, 
+                            { y: 15, opacity: 0 }, 
+                            { y: 0, opacity: 1, duration: 0.2, ease: "back.out(1.7)" }
+                        );
+                    }
+                });
             }
-        }
-
-        setApplyStatus(1);
-        setTimeout(() => setApplyStatus(0), 2000);
-    };
-
-    const clearDevOverrides = () => {
-        setDevTime('');
-        setDevDay('');
-        const p = new URLSearchParams(window.location.search);
-        p.delete('devt');
-        p.delete('devd');
-        window.history.pushState({}, '', `${window.location.pathname}?${p.toString()}`);
-    };
-
-    const goBack = () => {
-        // Updated to securely route back to the Time app's root URL
-        navigate(`/time${window.location.search}`); 
-    };
-
-    const renderTimetable = () => {
-        const user = USER_TIMETABLES[selectedUser];
-        if (!user) return <p>User not found.</p>;
-
-        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-        const periodTimesLong = { "0": "09:10", "1": "09:25", "2": "10:05", "Break": "10:45", "3": "11:00", "4": "11:40", "5": "12:20", "6": "13:00", "7": "13:35", "8": "14:10", "9": "14:50" };
-        const periodTimesShort = { "0": "09:10", "1": "09:25", "2": "10:05", "3": "10:45", "4": "11:25", "5": "12:05", "6": "12:45", "7": "13:25" };
-
-        return days.map((dayName, i) => {
-            const dayNum = i + 1;
-            const classes = user.timetable[dayNum];
-            if (!classes) return null;
-
-            const isShort = (dayNum === 3 || dayNum === 5);
-            const order = isShort ? ['0', '1', '2', '3', '4', '5', '6', '7'] : ['0', '1', '2', 'Break', '3', '4', '5', '6', '7', '8', '9'];
-            const times = isShort ? periodTimesShort : periodTimesLong;
-
-            return (
-                <div key={dayNum}>
-                    <div className="tt-day-header">{dayName}</div>
-                    <table className="tt-table">
-                        <thead><tr><th>Time</th><th>Period</th><th>Class</th></tr></thead>
-                        <tbody>
-                            {order.map(p => {
-                                if (p === 'Break') return <tr key={p} className="tt-break-row"><td>{times[p]}</td><td colSpan="2" className="break-label">BREAK</td></tr>;
-                                if (!classes[p]) return null;
-                                return <tr key={p}><td>{times[p]}</td><td>{p}</td><td>{classes[p]}</td></tr>;
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-            );
         });
-    };
+        lastStringsRef.current[id] = newStr;
+    }, []);
 
-    const previewBg = preset === 'custom' ? bgColor : (preset === 'dark' ? '#000000' : preset === 'light' ? '#ffffff' : preset === 'luxury' ? '#1a2e35' : '#020111');
-    const previewTxt = preset === 'custom' ? txtColor : (preset === 'dark' ? '#ffffff' : preset === 'light' ? '#000000' : preset === 'luxury' ? '#ffcc00' : '#ffffff');
+    // The Main 50ms Update Loop
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const currentParams = new URLSearchParams(window.location.search);
+            const devTime = currentParams.get('devt');
+            const devDay = currentParams.get('devd');
+            const animMode = currentParams.get('anim') || 'full';
+            const userParam = currentParams.get('u') || 'user1';
+            
+            let nowFull = new Date(Date.now() + timeOffsetRef.current);
+            const day = (devDay !== null) ? parseInt(devDay) : nowFull.getDay();
+            
+            let currentMs;
+            if (devTime) {
+                const p = devTime.split(':').map(Number);
+                currentMs = ((p[0] * 3600) + (p[1] * 60) + (p[2] || 0)) * 1000;
+            } else {
+                currentMs = (nowFull.getHours() * 3600 + nowFull.getMinutes() * 60 + nowFull.getSeconds()) * 1000 + nowFull.getMilliseconds();
+            }
+
+            const currentMins = Math.floor(currentMs / 60000);
+            const schedule = (day === 0 || day === 6) ? null : ((day === 3 || day === 5) ? PERIODS_SHORT : PERIODS_LONG);
+            
+            if (!schedule) {
+                setStatusLabel("Weekend");
+                updateRollingTimer(classTimerRef, "OFF", 'time-until-class', animMode);
+                document.title = "Weekend | potatogamer.uk";
+                return;
+            }
+
+            const classes = USER_TIMETABLES[userParam]?.timetable[day] || {};
+            const endMs = timeToMins(schedule[schedule.length - 1].end) * 60000;
+            
+            updateRollingTimer(dayTimerRef, formatDiff(endMs - currentMs, precisionRef.current['time-until-day']), 'time-until-day', animMode);
+
+            let pIdx = schedule.findIndex(p => currentMins >= timeToMins(p.start) && currentMins < timeToMins(p.end));
+            let p = pIdx !== -1 ? schedule[pIdx] : null;
+            
+            if (p) {
+                updateRollingTimer(periodTimerRef, formatDiff((timeToMins(p.end) * 60000) - currentMs, precisionRef.current['time-until-period']), 'time-until-period', animMode);
+            } else {
+                updateRollingTimer(periodTimerRef, "--:--", 'time-until-period', animMode);
+            }
+
+            let active = (p && classes[p.id]) ? classes[p.id] : null;
+            let next = schedule.find(p => timeToMins(p.start) > currentMins && classes[p.id]);
+
+            if (active) {
+                let last = p;
+                for (let i = pIdx + 1; i < schedule.length; i++) {
+                    if (classes[schedule[i].id] === active) last = schedule[i]; else break;
+                }
+                const diff = (timeToMins(last.end) * 60000) - currentMs;
+                const diffText = formatDiff(diff, precisionRef.current['time-until-class']);
+                
+                setStatusLabel(`End of ${active}`);
+                updateRollingTimer(classTimerRef, diffText, 'time-until-class', animMode);
+                document.title = `${diffText} till ${active} ends | potatogamer.uk`;
+            } else if (next) {
+                const diff = (timeToMins(next.start) * 60000) - currentMs;
+                const diffText = formatDiff(diff, precisionRef.current['time-until-class']);
+                
+                setStatusLabel("Next Class");
+                updateRollingTimer(classTimerRef, diffText, 'time-until-class', animMode);
+                document.title = `${diffText} till ${classes[next.id]} starts | potatogamer.uk`;
+            } else {
+                setStatusLabel("School Finished");
+                updateRollingTimer(classTimerRef, "DONE", 'time-until-class', animMode);
+                document.title = "School Finished | potatogamer.uk";
+            }
+
+            let up = active ? schedule.slice(pIdx + 1).find(p => classes[p.id] && classes[p.id] !== active) : next;
+            setPreviewLabel((up && classes[up.id]) ? `Next Up: ${classes[up.id]}` : "");
+
+        }, 50);
+
+        return () => clearInterval(interval);
+    }, [updateRollingTimer]);
+
+    const togglePrecision = (id) => {
+        precisionRef.current[id] = !precisionRef.current[id];
+        if (id === 'time-until-class' && classTimerRef.current) classTimerRef.current.innerHTML = '';
+        if (id === 'time-until-period' && periodTimerRef.current) periodTimerRef.current.innerHTML = '';
+        if (id === 'time-until-day' && dayTimerRef.current) dayTimerRef.current.innerHTML = '';
+    };
 
     return (
         <>
+            {/* Added Loading Screen Component */}
             <LoadingScreen isVisible={isLoading || isExiting} />
-            <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'stretch', justifyContent: 'flex-start', overflow: 'hidden', height: '100vh', width: '100%', backgroundColor: 'transparent', color: 'var(--text-main)' }}>
-                
-                <div className="sidebar" style={{ width: '250px', borderRight: '1px solid var(--ui-border)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px', flexShrink: 0 }}>
-                    <div className="sidebar-header" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px', userSelect: 'none' }}>
-                        <button className="back-arrow" onClick={goBack} title="Return to Main Page" style={{ background: 'none', border: 'none', color: 'var(--text-main)', cursor: 'pointer', padding: '5px' }}>
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ width: '20px', height: '20px' }}><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-                        </button>
-                        <h2 onClick={handleTitleClick} title="Click 5 times for Dev Menu" style={{ fontSize: '1.2rem', margin: 0, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '1px', cursor: 'pointer' }}>Settings</h2>
-                    </div>
-                    
-                    <button className={`tab-btn ${activeTab === 'theme' ? 'active' : ''}`} onClick={handleThemeTabClick} style={{ background: activeTab === 'theme' ? 'var(--ui-border)' : 'none', border: '1px solid transparent', color: 'var(--text-main)', textAlign: 'left', padding: '12px', borderRadius: '6px', cursor: 'pointer' }}>Theme</button>
-                    <button className={`tab-btn ${activeTab === 'timetable' ? 'active' : ''}`} onClick={() => handleOtherTabClick('timetable')} style={{ background: activeTab === 'timetable' ? 'var(--ui-border)' : 'none', border: '1px solid transparent', color: 'var(--text-main)', textAlign: 'left', padding: '12px', borderRadius: '6px', cursor: 'pointer' }}>Timetable</button>
-                    <button className={`tab-btn ${activeTab === 'accessibility' ? 'active' : ''}`} onClick={() => handleOtherTabClick('accessibility')} style={{ background: activeTab === 'accessibility' ? 'var(--ui-border)' : 'none', border: '1px solid transparent', color: 'var(--text-main)', textAlign: 'left', padding: '12px', borderRadius: '6px', cursor: 'pointer' }}>Accessibility</button>
-                    
-                    {devUnlocked && (
-                        <button className={`tab-btn ${activeTab === 'dev' ? 'active' : ''}`} onClick={() => handleOtherTabClick('dev')} style={{ background: activeTab === 'dev' ? 'rgba(255, 85, 85, 0.1)' : 'none', border: '1px dashed var(--text-dim)', color: '#ff5555', textAlign: 'left', padding: '12px', borderRadius: '6px', cursor: 'pointer' }}>Developer</button>
-                    )}
 
-                    {/* Bottom Icon Links */}
-                    <div style={{ marginTop: 'auto', display: 'flex', gap: '20px', justifyContent: 'center', paddingTop: '20px', borderTop: '1px solid var(--ui-border)' }}>
-                        <a href="https://github.com/thepotatogamer0/time" target="_blank" rel="noreferrer" title="GitHub Repository" style={{ color: 'var(--text-dim)', transition: 'color 0.2s', cursor: 'pointer' }} onMouseEnter={(e) => e.target.style.color = 'var(--text-main)'} onMouseLeave={(e) => e.target.style.color = 'var(--text-dim)'}>
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-                            </svg>
-                        </a>
-                        <a href="https://react.dev/" target="_blank" rel="noreferrer" title="React" style={{ color: 'var(--text-dim)', transition: 'color 0.2s', cursor: 'pointer' }} onMouseEnter={(e) => e.target.style.color = '#61dafb'} onMouseLeave={(e) => e.target.style.color = 'var(--text-dim)'}>
-                            <svg width="24" height="24" viewBox="-11.5 -10.23174 23 20.46348" fill="currentColor">
-                              <circle cx="0" cy="0" r="2.05" fill="currentColor"/>
-                              <g stroke="currentColor" strokeWidth="1" fill="none">
-                                <ellipse rx="11" ry="4.2"/>
-                                <ellipse rx="11" ry="4.2" transform="rotate(60)"/>
-                                <ellipse rx="11" ry="4.2" transform="rotate(120)"/>
-                              </g>
-                            </svg>
-                        </a>
-                        <a href="https://vitejs.dev/" target="_blank" rel="noreferrer" title="Vite" style={{ color: 'var(--text-dim)', transition: 'color 0.2s', cursor: 'pointer' }} onMouseEnter={(e) => e.target.style.color = '#646cff'} onMouseLeave={(e) => e.target.style.color = 'var(--text-dim)'}>
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M2.388 4.672L11.535 21.8c.206.386.75.385.955 0L21.611 4.672c.196-.367-.184-.77-.552-.586l-9.06 4.53-9.059-4.53c-.368-.184-.748.22-.552.586z"/>
-                            </svg>
-                        </a>
-                    </div>
+            {isStarsTheme && <Stars />}
+
+            {/* 2. Replace the hard-refresh with the client-side navigate function */}
+            <button 
+                id="settings-link" 
+                onClick={() => navigate(`/time/settings${window.location.search}`)} 
+                className="settings-btn" 
+                title="Settings"
+            >
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+            </button>
+
+            <div className="container">
+                <div id="status-label" className="label">{statusLabel}</div>
+                <div 
+                    id="time-until-class" 
+                    className="clickable-timer" 
+                    ref={classTimerRef}
+                    onClick={() => togglePrecision('time-until-class')}
+                >
+                    00:00:00
                 </div>
+                <div id="next-class-preview">{previewLabel}</div>
 
-                <div className="settings-content" style={{ flexGrow: 1, padding: '40px', overflowY: 'auto', maxWidth: '800px', display: 'flex', flexDirection: 'column' }}>
-                    
-                    {/* Theme Tab */}
-                    <div className="tab-content" style={{ display: activeTab === 'theme' ? 'block' : 'none', animation: 'fadeIn 0.3s ease', flexGrow: 1 }}>
-                        <div className="content-header" style={{ marginBottom: '30px' }}><h3 style={{ margin: 0, fontSize: '1.5rem' }}>Theme Customization</h3></div>
-                        
-                        <div className="control-group" style={{ marginBottom: '30px' }}>
-                            <label style={{ display: 'block', marginBottom: '10px', color: 'var(--text-dim)' }}>Theme Preset</label>
-                            <select value={preset} onChange={(e) => setPreset(e.target.value)} style={{ width: '100%', background: 'var(--bg-color)', color: 'var(--text-main)', border: '1px solid var(--ui-border)', padding: '10px', borderRadius: '6px' }}>
-                                <option value="custom">Custom</option>
-                                <option value="dark">Dark (Classic)</option>
-                                <option value="light">Light</option>
-                                <option value="luxury">Luxury</option>
-                                {starsUnlocked && <option value="stars">Stars (Secret)</option>}
-                            </select>
+                <div className="sub-timers">
+                    <div className="sub-box">
+                        <div 
+                            id="time-until-period" 
+                            className="sub-value clickable-timer"
+                            ref={periodTimerRef}
+                            onClick={() => togglePrecision('time-until-period')}
+                        >
+                            --:--
                         </div>
-                        
-                        <div className="color-pickers-container" style={{ display: 'flex', gap: '40px', marginTop: '20px', flexWrap: 'wrap' }}>
-                            <div className="picker-box" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-                                <label style={{ color: 'var(--text-dim)' }}>Background</label>
-                                <div ref={bgWheelRef}></div>
-                                <span className="hex-label" style={{ fontFamily: 'monospace', fontSize: '0.9rem', color: 'var(--text-dim)' }}>{bgColor.toUpperCase()}</span>
-                            </div>
-                            <div className="picker-box" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-                                <label style={{ color: 'var(--text-dim)' }}>Primary Text</label>
-                                <div ref={txtWheelRef}></div>
-                                <span className="hex-label" style={{ fontFamily: 'monospace', fontSize: '0.9rem', color: 'var(--text-dim)' }}>{txtColor.toUpperCase()}</span>
-                            </div>
-                        </div>
-
-                        <div className="preview-box" style={{ marginTop: '40px', padding: '30px', border: '1px solid var(--ui-border)', borderRadius: '12px', textAlign: 'center', backgroundColor: previewBg, color: previewTxt }}>
-                            <div className="label" style={{ fontSize: '0.8rem', letterSpacing: '2px', opacity: 0.7 }}>LIVE PREVIEW</div>
-                            <div style={{ fontSize: '3rem', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>00:42:15.284</div>
-                        </div>
+                        <div className="sub-label">End of Period</div>
                     </div>
-
-                    {/* Timetable Tab */}
-                    <div className="tab-content" style={{ display: activeTab === 'timetable' ? 'block' : 'none', animation: 'fadeIn 0.3s ease', flexGrow: 1 }}>
-                        <div className="content-header" style={{ marginBottom: '30px' }}><h3 style={{ margin: 0, fontSize: '1.5rem' }}>Your Timetable</h3></div>
-                        <div className="control-group" style={{ marginBottom: '30px' }}>
-                            <label style={{ display: 'block', marginBottom: '10px', color: 'var(--text-dim)' }}>Select User</label>
-                            <select value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)} style={{ width: '100%', background: 'var(--bg-color)', color: 'var(--text-main)', border: '1px solid var(--ui-border)', padding: '10px', borderRadius: '6px' }}>
-                                {Object.entries(USER_TIMETABLES).map(([id, user]) => (
-                                    <option key={id} value={id}>{user.name}</option>
-                                ))}
-                            </select>
+                    <div className="sub-box">
+                        <div 
+                            id="time-until-day" 
+                            className="sub-value clickable-timer"
+                            ref={dayTimerRef}
+                            onClick={() => togglePrecision('time-until-day')}
+                        >
+                            --:--
                         </div>
-                        <div id="timetable-container">
-                            {renderTimetable()}
-                        </div>
+                        <div className="sub-label">End of Day</div>
                     </div>
-
-                    {/* Accessibility Tab */}
-                    <div className="tab-content" style={{ display: activeTab === 'accessibility' ? 'block' : 'none', animation: 'fadeIn 0.3s ease', flexGrow: 1 }}>
-                        <div className="content-header" style={{ marginBottom: '30px' }}><h3 style={{ margin: 0, fontSize: '1.5rem' }}>Accessibility</h3></div>
-                        <div className="control-group" style={{ marginBottom: '30px' }}>
-                            <label style={{ display: 'block', marginBottom: '10px', color: 'var(--text-dim)' }}>Animation Level</label>
-                            <select value={animLevel} onChange={(e) => setAnimLevel(e.target.value)} style={{ width: '100%', background: 'var(--bg-color)', color: 'var(--text-main)', border: '1px solid var(--ui-border)', padding: '10px', borderRadius: '6px' }}>
-                                <option value="full">Full (Default)</option>
-                                <option value="minimal">Minimal (No Rolling Numbers)</option>
-                                <option value="none">None (No Animations)</option>
-                            </select>
-                            <p style={{ color: 'var(--text-dim)', marginTop: '15px', fontSize: '0.9rem', lineHeight: 1.5 }}>
-                                <strong>Full:</strong> All visual effects enabled.<br/>
-                                <strong>Minimal:</strong> Disables rolling numbers but keeps interface transitions.<br/>
-                                <strong>None:</strong> Removes all animations.
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* Developer Tab */}
-                    <div className="tab-content" style={{ display: activeTab === 'dev' ? 'block' : 'none', animation: 'fadeIn 0.3s ease', flexGrow: 1 }}>
-                        <div className="content-header" style={{ marginBottom: '30px' }}>
-                            <h3 style={{ margin: 0, fontSize: '1.5rem' }}>Developer Tools</h3>
-                            <p style={{ color: '#ff5555', marginTop: '5px', fontSize: '0.9rem' }}>⚠️ Overrides live time data</p>
-                        </div>
-                        
-                        <div className="control-group" style={{ marginBottom: '30px' }}>
-                            <label style={{ display: 'block', marginBottom: '10px', color: 'var(--text-dim)' }}>Time Override (HH:MM:SS)</label>
-                            <input type="text" value={devTime} onChange={(e) => setDevTime(e.target.value)} placeholder="e.g. 14:30:00" style={{ width: '100%', background: 'var(--bg-color)', color: 'var(--text-main)', border: '1px solid var(--ui-border)', padding: '10px', borderRadius: '6px' }} />
-                        </div>
-
-                        <div className="control-group" style={{ marginBottom: '30px' }}>
-                            <label style={{ display: 'block', marginBottom: '10px', color: 'var(--text-dim)' }}>Day Override</label>
-                            <select value={devDay} onChange={(e) => setDevDay(e.target.value)} style={{ width: '100%', background: 'var(--bg-color)', color: 'var(--text-main)', border: '1px solid var(--ui-border)', padding: '10px', borderRadius: '6px' }}>
-                                <option value="">-- Use Live Day --</option>
-                                <option value="1">Monday</option>
-                                <option value="2">Tuesday</option>
-                                <option value="3">Wednesday</option>
-                                <option value="4">Thursday</option>
-                                <option value="5">Friday</option>
-                                <option value="6">Saturday</option>
-                                <option value="0">Sunday</option>
-                            </select>
-                        </div>
-
-                        <div style={{ marginTop: '30px' }}>
-                            <button onClick={clearDevOverrides} style={{ background: '#ff5555', color: 'white', border: 'none', padding: '12px 30px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Clear Overrides & Reset</button>
-                        </div>
-                    </div>
-
-                    {/* Save Button */}
-                    <div className="action-bar" style={{ display: activeTab !== 'timetable' ? 'flex' : 'none', marginTop: 'auto', alignItems: 'center', gap: '15px', borderTop: '1px solid var(--ui-border)', paddingTop: '20px' }}>
-                        <button onClick={saveSettings} style={{ background: 'var(--text-main)', color: 'var(--bg-color)', border: 'none', padding: '12px 30px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem', boxShadow: '0 4px 0 var(--text-dim)' }}>Apply Changes</button>
-                        <span style={{ color: '#44ff44', fontSize: '0.9rem', fontWeight: 'bold', opacity: applyStatus, transition: 'opacity 0.3s' }}>Changes Applied</span>
-                    </div>
-
                 </div>
             </div>
+
+            {isDevMode && <div id="test-indicator" style={{ display: 'block' }}>DEVELOPMENT OVERRIDE ACTIVE</div>}
         </>
     );
 }
