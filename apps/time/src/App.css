@@ -288,10 +288,10 @@ body.theme-stars .stars {
     display: flex;
     flex-direction: column;
     max-width: 800px;
-    margin: 0; /* Left align fix */
+    margin: 0;
     width: 100%;
     box-sizing: border-box;
-    text-align: left; /* Left align fix */
+    text-align: left;
 }
 
 .color-pickers-container {
@@ -373,6 +373,7 @@ body.theme-stars .stars {
     .settings-content {
         padding: 20px;
         align-items: flex-start;
+        text-align: center; 
     }
 
     .color-pickers-container {
