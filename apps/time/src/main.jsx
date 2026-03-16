@@ -19,12 +19,13 @@ function AppRouter() {
   // A custom function to change the URL without refreshing the page
   const navigate = (url) => {
     window.history.pushState({}, '', url);
-    // Extract just the path (e.g., '/time/settings') to update the state
+    // Extract just the path to update the state
     setCurrentPath(url.split('?')[0]);
   };
 
-  // Strict path checking to ensure we route correctly within the /time app
-  const isSettings = currentPath === '/time/settings' || currentPath === '/time/settings/';
+  // Using .endsWith is foolproof across local Vite dev and Vercel production.
+  // It instantly catches both "/settings" and "/time/settings".
+  const isSettings = currentPath.endsWith('/settings') || currentPath.endsWith('/settings/');
 
   return (
     <React.StrictMode>
