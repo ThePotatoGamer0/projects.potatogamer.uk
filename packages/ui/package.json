@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "main": "./src/index.js",
+  "scripts": {
+    "build": "echo 'No build needed for UI package'"
+  },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0"
   }

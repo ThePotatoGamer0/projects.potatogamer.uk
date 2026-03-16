@@ -4,6 +4,7 @@ import gsap from 'gsap';
 import { PERIODS_LONG, PERIODS_SHORT } from './constants/periods';
 import { USER_TIMETABLES } from './constants/users';
 import Stars from './Stars';
+import { LoadingScreen } from '@projects/ui'; // Added import
 import './App.css'; 
 
 // Helper functions kept outside the component to prevent recreation
@@ -28,6 +29,10 @@ export default function App({ navigate }) {
     const params = new URLSearchParams(window.location.search);
     const isStarsTheme = params.get('t') === 'stars';
 
+    // Added Loading States
+    const [isLoading, setIsLoading] = useState(true);
+    const [isExiting, setIsExiting] = useState(false);
+
     // React State for things that update infrequently
     const [statusLabel, setStatusLabel] = useState("Status");
     const [previewLabel, setPreviewLabel] = useState("");
@@ -50,6 +55,21 @@ export default function App({ navigate }) {
     const classTimerRef = useRef(null);
     const periodTimerRef = useRef(null);
     const dayTimerRef = useRef(null);
+
+    // Added Entry Transition Effect
+    useEffect(() => {
+        const timer = setTimeout(() => setIsLoading(false), 800);
+        return () => clearTimeout(timer);
+    }, []);
+
+    // Added helper for bridging to other apps (like going back to Home)
+    const handleExternalNavigation = (e, url) => {
+        e.preventDefault();
+        setIsExiting(true);
+        setTimeout(() => {
+            window.location.href = url;
+        }, 400);
+    };
 
     // Initial Setup (Time Sync & Themes)
     useEffect(() => {
@@ -228,6 +248,9 @@ export default function App({ navigate }) {
 
     return (
         <>
+            {/* Added Loading Screen Component */}
+            <LoadingScreen isVisible={isLoading || isExiting} />
+
             {isStarsTheme && <Stars />}
 
             {/* 2. Replace the hard-refresh with the client-side navigate function */}
