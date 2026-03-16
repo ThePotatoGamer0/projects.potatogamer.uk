@@ -288,10 +288,10 @@ body.theme-stars .stars {
     display: flex;
     flex-direction: column;
     max-width: 800px;
-    margin: 0;
+    margin: 0; 
     width: 100%;
     box-sizing: border-box;
-    text-align: left;
+    text-align: left; 
 }
 
 .color-pickers-container {
@@ -313,7 +313,7 @@ body.theme-stars .stars {
 }
 
 .content-bottom-links {
-    display: none; /* Hidden on desktop */
+    display: none; 
     margin-top: auto;
     gap: 25px;
     justify-content: center;
@@ -361,7 +361,6 @@ body.theme-stars .stars {
         white-space: nowrap;
     }
 
-    /* Flip which icons are shown */
     .sidebar-bottom-links {
         display: none; 
     }
@@ -371,13 +370,14 @@ body.theme-stars .stars {
     }
 
     .settings-content {
-        padding: 20px;
-        align-items: flex-start;
-        text-align: center; 
+        padding: 20px 15px; /* Reclaim horizontal space */
+        align-items: stretch; /* Allows inputs, menus, and preview boxes to expand */
+        text-align: left;
     }
 
     .color-pickers-container {
-        flex-direction: column;
-        align-items: flex-start; /* Left align fix for mobile */
+        flex-direction: row; /* Aligns color wheels side-by-side */
+        justify-content: space-around; /* Spreads them evenly across the screen */
+        align-items: center;
     }
 }
