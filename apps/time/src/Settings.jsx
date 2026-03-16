@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import iro from '@jaames/iro';
 import { USER_TIMETABLES } from './constants/users';
-import { LoadingScreen } from '@projects/ui'; // Imported shared component
+import { LoadingScreen } from '@projects/ui';
 import './App.css';
 
 export default function Settings({ navigate }) {
@@ -147,7 +147,8 @@ export default function Settings({ navigate }) {
     };
 
     const goBack = () => {
-        navigate(`/?${window.location.search.substring(1)}`); 
+        // Updated to securely route back to the Time app's root URL
+        navigate(`/time${window.location.search}`); 
     };
 
     const renderTimetable = () => {
