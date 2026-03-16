@@ -6,26 +6,25 @@ import Settings from './Settings.jsx';
 import './index.css';
 
 function AppRouter() {
-  // Store the current URL path in React state
+  // 1. Initialize state securely with the browser's natively parsed pathname
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
 
-  // Listen for the user clicking the browser's native Back/Forward arrows
   useEffect(() => {
+    // 2. Handle browser Back/Forward buttons smoothly
     const handlePopState = () => setCurrentPath(window.location.pathname);
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // A custom function to change the URL without refreshing the page
   const navigate = (url) => {
+    // 3. Push the new URL to the browser history
     window.history.pushState({}, '', url);
-    // Extract just the path to update the state
-    setCurrentPath(url.split('?')[0]);
+    // 4. Ask the browser for the clean pathname *after* it processes the push
+    setCurrentPath(window.location.pathname);
   };
 
-  // Using .endsWith is foolproof across local Vite dev and Vercel production.
-  // It instantly catches both "/settings" and "/time/settings".
-  const isSettings = currentPath.endsWith('/settings') || currentPath.endsWith('/settings/');
+  // 5. Bulletproof check: catches /settings, /time/settings, and /time/settings/
+  const isSettings = currentPath.toLowerCase().includes('/settings');
 
   return (
     <React.StrictMode>
