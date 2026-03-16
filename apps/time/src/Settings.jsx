@@ -40,12 +40,12 @@ export default function Settings({ navigate }) {
     const themeClickCount = useRef(0);
     const devClickCount = useRef(0);
 
-    // Entry Transition Effect (Only runs if not already loaded)
+    // Entry Transition Effect
     useEffect(() => {
         if (!window.__TIME_APP_LOADED__) {
             const timer = setTimeout(() => {
                 setIsLoading(false);
-                window.__TIME_APP_LOADED__ = true; // Mark as loaded for future internal navigation
+                window.__TIME_APP_LOADED__ = true;
             }, 800);
             return () => clearTimeout(timer);
         }
@@ -111,14 +111,11 @@ export default function Settings({ navigate }) {
         const newURL = `${window.location.pathname}?${newParams.toString()}`;
         window.history.pushState({}, '', newURL);
 
-        // --- THE DOM CLEANUP FIX ---
-        // Force the browser to paint the new colors immediately and remove old classes
         if (preset === 'stars') {
             document.body.classList.add('theme-stars');
             document.documentElement.style.setProperty('--bg-color', '#020111');
             document.documentElement.style.setProperty('--text-main', '#ffffff');
         } else {
-            // Wash off the permanent tattoo!
             document.body.classList.remove('theme-stars'); 
             
             const presetsMap = {
@@ -219,26 +216,26 @@ export default function Settings({ navigate }) {
                 </div>
             )}
 
-            <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'stretch', justifyContent: 'flex-start', overflow: 'hidden', height: '100vh', width: '100%', backgroundColor: 'transparent', color: 'var(--text-main)' }}>
+            <div className="settings-wrapper">
                 
-                <div className="sidebar" style={{ width: '250px', borderRight: '1px solid var(--ui-border)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px', flexShrink: 0 }}>
-                    <div className="sidebar-header" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px', userSelect: 'none' }}>
+                <div className="sidebar">
+                    <div className="sidebar-header">
                         <button className="back-arrow" onClick={goBack} title="Return to Main Page" style={{ background: 'none', border: 'none', color: 'var(--text-main)', cursor: 'pointer', padding: '5px' }}>
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ width: '20px', height: '20px' }}><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
                         </button>
                         <h2 onClick={handleTitleClick} title="Click 5 times for Dev Menu" style={{ fontSize: '1.2rem', margin: 0, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '1px', cursor: 'pointer' }}>Settings</h2>
                     </div>
                     
-                    <button className={`tab-btn ${activeTab === 'theme' ? 'active' : ''}`} onClick={handleThemeTabClick} style={{ background: activeTab === 'theme' ? 'var(--ui-border)' : 'none', border: '1px solid transparent', color: 'var(--text-main)', textAlign: 'left', padding: '12px', borderRadius: '6px', cursor: 'pointer' }}>Theme</button>
-                    <button className={`tab-btn ${activeTab === 'timetable' ? 'active' : ''}`} onClick={() => handleOtherTabClick('timetable')} style={{ background: activeTab === 'timetable' ? 'var(--ui-border)' : 'none', border: '1px solid transparent', color: 'var(--text-main)', textAlign: 'left', padding: '12px', borderRadius: '6px', cursor: 'pointer' }}>Timetable</button>
-                    <button className={`tab-btn ${activeTab === 'accessibility' ? 'active' : ''}`} onClick={() => handleOtherTabClick('accessibility')} style={{ background: activeTab === 'accessibility' ? 'var(--ui-border)' : 'none', border: '1px solid transparent', color: 'var(--text-main)', textAlign: 'left', padding: '12px', borderRadius: '6px', cursor: 'pointer' }}>Accessibility</button>
+                    <button className={`tab-btn ${activeTab === 'theme' ? 'active' : ''}`} onClick={handleThemeTabClick}>Theme</button>
+                    <button className={`tab-btn ${activeTab === 'timetable' ? 'active' : ''}`} onClick={() => handleOtherTabClick('timetable')}>Timetable</button>
+                    <button className={`tab-btn ${activeTab === 'accessibility' ? 'active' : ''}`} onClick={() => handleOtherTabClick('accessibility')}>Accessibility</button>
                     
                     {devUnlocked && (
-                        <button className={`tab-btn ${activeTab === 'dev' ? 'active' : ''}`} onClick={() => handleOtherTabClick('dev')} style={{ background: activeTab === 'dev' ? 'rgba(255, 85, 85, 0.1)' : 'none', border: '1px dashed var(--text-dim)', color: '#ff5555', textAlign: 'left', padding: '12px', borderRadius: '6px', cursor: 'pointer' }}>Developer</button>
+                        <button className={`tab-btn dev-tab ${activeTab === 'dev' ? 'active' : ''}`} onClick={() => handleOtherTabClick('dev')}>Developer</button>
                     )}
 
                     {/* Bottom Icon Links */}
-                    <div style={{ marginTop: 'auto', display: 'flex', gap: '20px', justifyContent: 'center', paddingTop: '20px', borderTop: '1px solid var(--ui-border)' }}>
+                    <div className="bottom-links">
                         <a onClick={() => setShowHomeModal(true)} title="Return to Main Site" style={{ color: 'var(--text-dim)', transition: 'color 0.2s', cursor: 'pointer' }} onMouseEnter={(e) => e.target.style.color = 'var(--text-main)'} onMouseLeave={(e) => e.target.style.color = 'var(--text-dim)'}>
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
@@ -260,15 +257,10 @@ export default function Settings({ navigate }) {
                               </g>
                             </svg>
                         </a>
-                        <a href="https://vitejs.dev/" target="_blank" rel="noreferrer" title="Vite" style={{ color: 'var(--text-dim)', transition: 'color 0.2s', cursor: 'pointer' }} onMouseEnter={(e) => e.target.style.color = '#646cff'} onMouseLeave={(e) => e.target.style.color = 'var(--text-dim)'}>
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M2.388 4.672L11.535 21.8c.206.386.75.385.955 0L21.611 4.672c.196-.367-.184-.77-.552-.586l-9.06 4.53-9.059-4.53c-.368-.184-.748.22-.552.586z"/>
-                            </svg>
-                        </a>
                     </div>
                 </div>
 
-                <div className="settings-content" style={{ flexGrow: 1, padding: '40px', overflowY: 'auto', maxWidth: '800px', display: 'flex', flexDirection: 'column' }}>
+                <div className="settings-content">
                     
                     {/* Theme Tab */}
                     <div className="tab-content" style={{ display: activeTab === 'theme' ? 'block' : 'none', animation: 'fadeIn 0.3s ease', flexGrow: 1 }}>
@@ -285,7 +277,7 @@ export default function Settings({ navigate }) {
                             </select>
                         </div>
                         
-                        <div className="color-pickers-container" style={{ display: 'flex', gap: '40px', marginTop: '20px', flexWrap: 'wrap' }}>
+                        <div className="color-pickers-container">
                             <div className="picker-box" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
                                 <label style={{ color: 'var(--text-dim)' }}>Background</label>
                                 <div ref={bgWheelRef}></div>
