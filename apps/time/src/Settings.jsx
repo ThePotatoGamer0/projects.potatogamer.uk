@@ -11,6 +11,9 @@ export default function Settings({ navigate }) {
     // Check if the app has already loaded in this browser session
     const [isLoading, setIsLoading] = useState(!window.__TIME_APP_LOADED__);
     const [isExiting, setIsExiting] = useState(false);
+    
+    // Modal State
+    const [showHomeModal, setShowHomeModal] = useState(false);
 
     // UI State
     const [activeTab, setActiveTab] = useState('theme');
@@ -147,8 +150,15 @@ export default function Settings({ navigate }) {
     };
 
     const goBack = () => {
-        // Updated to securely route back to the Time app's root URL
         navigate(`/time${window.location.search}`); 
+    };
+
+    const handleExternalNavigation = (e, url) => {
+        e.preventDefault();
+        setIsExiting(true);
+        setTimeout(() => {
+            window.location.href = url;
+        }, 400);
     };
 
     const renderTimetable = () => {
@@ -192,6 +202,23 @@ export default function Settings({ navigate }) {
     return (
         <>
             <LoadingScreen isVisible={isLoading || isExiting} />
+            
+            {/* Warning Modal */}
+            {showHomeModal && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000, padding: '20px', boxSizing: 'border-box' }}>
+                    <div style={{ backgroundColor: 'var(--bg-color)', border: '1px solid var(--ui-border)', padding: '30px', borderRadius: '12px', maxWidth: '400px', textAlign: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
+                        <h3 style={{ marginTop: 0, color: 'var(--text-main)' }}>Don't lose your settings!</h3>
+                        <p style={{ color: 'var(--text-dim)', fontSize: '0.9rem', marginBottom: '25px', lineHeight: '1.5' }}>
+                            Your setup is saved directly in this URL. Make sure you <strong>bookmark this page</strong> or copy the link before leaving the Time App, otherwise your customizations will be lost.
+                        </p>
+                        <div style={{ display: 'flex', gap: '15px', justifyContent: 'center' }}>
+                            <button onClick={() => setShowHomeModal(false)} style={{ padding: '10px 20px', borderRadius: '6px', background: 'transparent', border: '1px solid var(--ui-border)', color: 'var(--text-main)', cursor: 'pointer', fontWeight: 'bold' }}>Cancel</button>
+                            <button onClick={(e) => { setShowHomeModal(false); handleExternalNavigation(e, '/'); }} style={{ padding: '10px 20px', borderRadius: '6px', background: 'var(--text-main)', border: 'none', color: 'var(--bg-color)', cursor: 'pointer', fontWeight: 'bold' }}>Leave</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'stretch', justifyContent: 'flex-start', overflow: 'hidden', height: '100vh', width: '100%', backgroundColor: 'transparent', color: 'var(--text-main)' }}>
                 
                 <div className="sidebar" style={{ width: '250px', borderRight: '1px solid var(--ui-border)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px', flexShrink: 0 }}>
@@ -212,6 +239,12 @@ export default function Settings({ navigate }) {
 
                     {/* Bottom Icon Links */}
                     <div style={{ marginTop: 'auto', display: 'flex', gap: '20px', justifyContent: 'center', paddingTop: '20px', borderTop: '1px solid var(--ui-border)' }}>
+                        <a onClick={() => setShowHomeModal(true)} title="Return to Main Site" style={{ color: 'var(--text-dim)', transition: 'color 0.2s', cursor: 'pointer' }} onMouseEnter={(e) => e.target.style.color = 'var(--text-main)'} onMouseLeave={(e) => e.target.style.color = 'var(--text-dim)'}>
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                            </svg>
+                        </a>
                         <a href="https://github.com/thepotatogamer0/time" target="_blank" rel="noreferrer" title="GitHub Repository" style={{ color: 'var(--text-dim)', transition: 'color 0.2s', cursor: 'pointer' }} onMouseEnter={(e) => e.target.style.color = 'var(--text-main)'} onMouseLeave={(e) => e.target.style.color = 'var(--text-dim)'}>
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
