@@ -19,13 +19,16 @@ function AppRouter() {
   // A custom function to change the URL without refreshing the page
   const navigate = (url) => {
     window.history.pushState({}, '', url);
-    // Extract just the path (e.g., '/settings') to update the state
+    // Extract just the path (e.g., '/time/settings') to update the state
     setCurrentPath(url.split('?')[0]);
   };
 
+  // Strict path checking to ensure we route correctly within the /time app
+  const isSettings = currentPath === '/time/settings' || currentPath === '/time/settings/';
+
   return (
     <React.StrictMode>
-      {currentPath.includes('/settings') 
+      {isSettings 
         ? <Settings navigate={navigate} /> 
         : <App navigate={navigate} />}
     </React.StrictMode>
