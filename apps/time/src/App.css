@@ -367,17 +367,19 @@ body.theme-stars .stars {
 
     .content-bottom-links {
         display: flex; 
+        /* Added extra padding for mobile gesture bar / home safe area */
+        padding-bottom: 60px;
     }
 
     .settings-content {
-        padding: 20px 15px; /* Reclaim horizontal space */
-        align-items: stretch; /* Allows inputs, menus, and preview boxes to expand */
+        padding: 20px 15px; 
+        align-items: stretch; 
         text-align: left;
     }
 
     .color-pickers-container {
-        flex-direction: row; /* Aligns color wheels side-by-side */
-        justify-content: space-around; /* Spreads them evenly across the screen */
+        flex-direction: row; 
+        justify-content: space-around; 
         align-items: center;
     }
 }
