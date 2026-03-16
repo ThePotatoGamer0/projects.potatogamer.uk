@@ -44,13 +44,16 @@ function AppRouter() {
 
   return (
     <React.StrictMode>
-      {/* Wrapper div that handles the smooth opacity transition */}
+      {/* Wrapper div acting as a flex container to keep everything perfectly centered */}
       <div 
         style={{ 
           opacity: isFading ? 0 : 1, 
           transition: 'opacity 0.25s ease-in-out',
           width: '100%',
-          height: '100%'
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
         }}
       >
         {isSettings 
