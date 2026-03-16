@@ -4,7 +4,7 @@ import gsap from 'gsap';
 import { PERIODS_LONG, PERIODS_SHORT } from './constants/periods';
 import { USER_TIMETABLES } from './constants/users';
 import Stars from './Stars';
-import { LoadingScreen } from '@projects/ui'; // Added import
+import { LoadingScreen } from '@projects/ui';
 import './App.css'; 
 
 // Helper functions kept outside the component to prevent recreation
@@ -24,13 +24,12 @@ function formatDiff(totalMs, showMs = false) {
     return showMs ? `${base}.${ms.toString().padStart(3, '0')}` : base;
 }
 
-// 1. Accept the `Maps` function as a prop from main.jsx
 export default function App({ navigate }) {
     const params = new URLSearchParams(window.location.search);
     const isStarsTheme = params.get('t') === 'stars';
 
-    // Added Loading States
-    const [isLoading, setIsLoading] = useState(true);
+    // Check if the app has already loaded in this browser session
+    const [isLoading, setIsLoading] = useState(!window.__TIME_APP_LOADED__);
     const [isExiting, setIsExiting] = useState(false);
 
     // React State for things that update infrequently
@@ -56,13 +55,18 @@ export default function App({ navigate }) {
     const periodTimerRef = useRef(null);
     const dayTimerRef = useRef(null);
 
-    // Added Entry Transition Effect
+    // Entry Transition Effect (Only runs if not already loaded)
     useEffect(() => {
-        const timer = setTimeout(() => setIsLoading(false), 800);
-        return () => clearTimeout(timer);
+        if (!window.__TIME_APP_LOADED__) {
+            const timer = setTimeout(() => {
+                setIsLoading(false);
+                window.__TIME_APP_LOADED__ = true; // Mark as loaded for future navigation
+            }, 800);
+            return () => clearTimeout(timer);
+        }
     }, []);
 
-    // Added helper for bridging to other apps (like going back to Home)
+    // Helper for bridging to OTHER apps (like going back to Home)
     const handleExternalNavigation = (e, url) => {
         e.preventDefault();
         setIsExiting(true);
@@ -248,12 +252,10 @@ export default function App({ navigate }) {
 
     return (
         <>
-            {/* Added Loading Screen Component */}
             <LoadingScreen isVisible={isLoading || isExiting} />
 
             {isStarsTheme && <Stars />}
 
-            {/* 2. Replace the hard-refresh with the client-side navigate function */}
             <button 
                 id="settings-link" 
                 onClick={() => navigate(`/settings${window.location.search}`)} 
