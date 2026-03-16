@@ -12,8 +12,10 @@ export default function Settings({ navigate }) {
     const [isLoading, setIsLoading] = useState(!window.__TIME_APP_LOADED__);
     const [isExiting, setIsExiting] = useState(false);
     
-    // Modal State
+    // Modal States
     const [showHomeModal, setShowHomeModal] = useState(false);
+    const [showDevModal, setShowDevModal] = useState(false);
+    const [showStarsModal, setShowStarsModal] = useState(false);
 
     // UI State
     const [activeTab, setActiveTab] = useState('theme');
@@ -76,7 +78,7 @@ export default function Settings({ navigate }) {
         devClickCount.current += 1;
         if (devClickCount.current === 5) {
             setDevUnlocked(true);
-            alert("Developer Mode Unlocked! 🛠️");
+            setShowDevModal(true);
         }
     };
 
@@ -86,7 +88,7 @@ export default function Settings({ navigate }) {
         if (themeClickCount.current === 7 && !starsUnlocked) {
             setStarsUnlocked(true);
             setPreset('stars');
-            alert("Achievement Unlocked: Space Traveler! 🚀");
+            setShowStarsModal(true);
         }
     };
 
@@ -200,7 +202,7 @@ export default function Settings({ navigate }) {
         <>
             <LoadingScreen isVisible={isLoading || isExiting} />
             
-            {/* Warning Modal */}
+            {/* Navigational Warning Modal */}
             {showHomeModal && (
                 <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000, padding: '20px', boxSizing: 'border-box' }}>
                     <div style={{ backgroundColor: 'var(--bg-color)', border: '1px solid var(--ui-border)', padding: '30px', borderRadius: '12px', maxWidth: '400px', textAlign: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
@@ -212,6 +214,32 @@ export default function Settings({ navigate }) {
                             <button onClick={() => setShowHomeModal(false)} style={{ padding: '10px 20px', borderRadius: '6px', background: 'transparent', border: '1px solid var(--ui-border)', color: 'var(--text-main)', cursor: 'pointer', fontWeight: 'bold' }}>Cancel</button>
                             <button onClick={(e) => { setShowHomeModal(false); handleExternalNavigation(e, '/'); }} style={{ padding: '10px 20px', borderRadius: '6px', background: 'var(--text-main)', border: 'none', color: 'var(--bg-color)', cursor: 'pointer', fontWeight: 'bold' }}>Leave</button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Developer Mode Easter Egg Modal */}
+            {showDevModal && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000, padding: '20px', boxSizing: 'border-box' }}>
+                    <div style={{ backgroundColor: 'var(--bg-color)', border: '1px dashed #ff5555', padding: '30px', borderRadius: '12px', maxWidth: '400px', textAlign: 'center', boxShadow: '0 10px 30px rgba(255,85,85,0.2)' }}>
+                        <h3 style={{ marginTop: 0, color: '#ff5555' }}>Developer Mode Unlocked! 🛠️</h3>
+                        <p style={{ color: 'var(--text-dim)', fontSize: '0.9rem', marginBottom: '25px', lineHeight: '1.5' }}>
+                            You now have access to advanced developer tools and time overrides. Use them wisely!
+                        </p>
+                        <button onClick={() => setShowDevModal(false)} style={{ padding: '10px 20px', borderRadius: '6px', background: '#ff5555', border: 'none', color: '#fff', cursor: 'pointer', fontWeight: 'bold' }}>Got it</button>
+                    </div>
+                </div>
+            )}
+
+            {/* Stars Theme Easter Egg Modal */}
+            {showStarsModal && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000, padding: '20px', boxSizing: 'border-box' }}>
+                    <div style={{ backgroundColor: '#020111', border: '1px solid #444', padding: '30px', borderRadius: '12px', maxWidth: '400px', textAlign: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.8)' }}>
+                        <h3 style={{ marginTop: 0, color: '#fff' }}>Achievement Unlocked! 🚀</h3>
+                        <p style={{ color: '#aaa', fontSize: '0.9rem', marginBottom: '25px', lineHeight: '1.5' }}>
+                            You've discovered the secret Space Traveler theme. It has been unlocked and added to your theme presets.
+                        </p>
+                        <button onClick={() => setShowStarsModal(false)} style={{ padding: '10px 20px', borderRadius: '6px', background: '#fff', border: 'none', color: '#000', cursor: 'pointer', fontWeight: 'bold' }}>Awesome</button>
                     </div>
                 </div>
             )}
@@ -233,31 +261,6 @@ export default function Settings({ navigate }) {
                     {devUnlocked && (
                         <button className={`tab-btn dev-tab ${activeTab === 'dev' ? 'active' : ''}`} onClick={() => handleOtherTabClick('dev')}>Developer</button>
                     )}
-
-                    {/* Bottom Icon Links */}
-                    <div className="bottom-links">
-                        <a onClick={() => setShowHomeModal(true)} title="Return to Main Site" style={{ color: 'var(--text-dim)', transition: 'color 0.2s', cursor: 'pointer' }} onMouseEnter={(e) => e.target.style.color = 'var(--text-main)'} onMouseLeave={(e) => e.target.style.color = 'var(--text-dim)'}>
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                                <polyline points="9 22 9 12 15 12 15 22"></polyline>
-                            </svg>
-                        </a>
-                        <a href="https://github.com/thepotatogamer0/time" target="_blank" rel="noreferrer" title="GitHub Repository" style={{ color: 'var(--text-dim)', transition: 'color 0.2s', cursor: 'pointer' }} onMouseEnter={(e) => e.target.style.color = 'var(--text-main)'} onMouseLeave={(e) => e.target.style.color = 'var(--text-dim)'}>
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-                            </svg>
-                        </a>
-                        <a href="https://react.dev/" target="_blank" rel="noreferrer" title="React" style={{ color: 'var(--text-dim)', transition: 'color 0.2s', cursor: 'pointer' }} onMouseEnter={(e) => e.target.style.color = '#61dafb'} onMouseLeave={(e) => e.target.style.color = 'var(--text-dim)'}>
-                            <svg width="24" height="24" viewBox="-11.5 -10.23174 23 20.46348" fill="currentColor">
-                              <circle cx="0" cy="0" r="2.05" fill="currentColor"/>
-                              <g stroke="currentColor" strokeWidth="1" fill="none">
-                                <ellipse rx="11" ry="4.2"/>
-                                <ellipse rx="11" ry="4.2" transform="rotate(60)"/>
-                                <ellipse rx="11" ry="4.2" transform="rotate(120)"/>
-                              </g>
-                            </svg>
-                        </a>
-                    </div>
                 </div>
 
                 <div className="settings-content">
@@ -365,6 +368,36 @@ export default function Settings({ navigate }) {
                     <div className="action-bar" style={{ display: activeTab !== 'timetable' ? 'flex' : 'none', marginTop: 'auto', alignItems: 'center', gap: '15px', borderTop: '1px solid var(--ui-border)', paddingTop: '20px' }}>
                         <button onClick={saveSettings} style={{ background: 'var(--text-main)', color: 'var(--bg-color)', border: 'none', padding: '12px 30px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem', boxShadow: '0 4px 0 var(--text-dim)' }}>Apply Changes</button>
                         <span style={{ color: '#44ff44', fontSize: '0.9rem', fontWeight: 'bold', opacity: applyStatus, transition: 'opacity 0.3s' }}>Changes Applied</span>
+                    </div>
+
+                    {/* NEW FOOTER SECTION: Keeps icons clean at the bottom of the content area */}
+                    <div className="settings-footer" style={{ marginTop: activeTab === 'timetable' ? 'auto' : '40px', display: 'flex', gap: '25px', justifyContent: 'center', paddingTop: '30px', paddingBottom: '20px', borderTop: '1px solid var(--ui-border)', flexWrap: 'wrap' }}>
+                        <a onClick={() => setShowHomeModal(true)} title="Return to Main Site" style={{ color: 'var(--text-dim)', transition: 'color 0.2s', cursor: 'pointer' }} onMouseEnter={(e) => e.target.style.color = 'var(--text-main)'} onMouseLeave={(e) => e.target.style.color = 'var(--text-dim)'}>
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                            </svg>
+                        </a>
+                        <a href="https://github.com/thepotatogamer0/time" target="_blank" rel="noreferrer" title="GitHub Repository" style={{ color: 'var(--text-dim)', transition: 'color 0.2s', cursor: 'pointer' }} onMouseEnter={(e) => e.target.style.color = 'var(--text-main)'} onMouseLeave={(e) => e.target.style.color = 'var(--text-dim)'}>
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                            </svg>
+                        </a>
+                        <a href="https://react.dev/" target="_blank" rel="noreferrer" title="React" style={{ color: 'var(--text-dim)', transition: 'color 0.2s', cursor: 'pointer' }} onMouseEnter={(e) => e.target.style.color = '#61dafb'} onMouseLeave={(e) => e.target.style.color = 'var(--text-dim)'}>
+                            <svg width="24" height="24" viewBox="-11.5 -10.23174 23 20.46348" fill="currentColor">
+                              <circle cx="0" cy="0" r="2.05" fill="currentColor"/>
+                              <g stroke="currentColor" strokeWidth="1" fill="none">
+                                <ellipse rx="11" ry="4.2"/>
+                                <ellipse rx="11" ry="4.2" transform="rotate(60)"/>
+                                <ellipse rx="11" ry="4.2" transform="rotate(120)"/>
+                              </g>
+                            </svg>
+                        </a>
+                        <a href="https://vitejs.dev/" target="_blank" rel="noreferrer" title="Vite" style={{ color: 'var(--text-dim)', transition: 'color 0.2s', cursor: 'pointer' }} onMouseEnter={(e) => e.target.style.color = '#646cff'} onMouseLeave={(e) => e.target.style.color = 'var(--text-dim)'}>
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M2.388 4.672L11.535 21.8c.206.386.75.385.955 0L21.611 4.672c.196-.367-.184-.77-.552-.586l-9.06 4.53-9.059-4.53c-.368-.184-.748.22-.552.586z"/>
+                            </svg>
+                        </a>
                     </div>
 
                 </div>
