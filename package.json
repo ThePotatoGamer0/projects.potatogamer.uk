@@ -10,5 +10,8 @@
     "dev": "npm run dev --workspaces",
     "build": "npm run build --workspaces",
     "install:all": "npm install"
+  },
+  "dependencies": {
+    "lucide-react": "^0.577.0"
   }
 }

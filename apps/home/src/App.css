@@ -1,90 +1,96 @@
-/* apps/home/src/App.css */
+:root {
+    --bg-color: #000000;
+    --text-main: #ffffff;
+    --text-dim: #888888;
+    --ui-border: #444444;
+}
 
-/* Remove browser defaults that cause the white border */
-:root, body {
+* {
     margin: 0;
     padding: 0;
-    background-color: #000000; /* Matches your theme */
+    box-sizing: border-box;
+}
+
+body, html, #root {
     width: 100%;
     height: 100%;
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     overflow: hidden;
 }
 
-#root {
-    width: 100%;
-    height: 100%;
-    margin: 0;
-    padding: 0;
-}
-
 .home-container {
-    background-color: #000000;
-    color: #ffffff;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     height: 100vh;
-    width: 100vw;
     display: flex;
-    flex-direction: column;
-    align-items: center;
     justify-content: center;
+    align-items: center;
+    position: relative;
 }
 
 .brand-corner {
     position: absolute;
     top: 20px;
     left: 20px;
-    font-weight: 700;
-    letter-spacing: 1px;
     font-size: 0.9rem;
     color: var(--text-dim);
 }
 
-.main-content {
+.container {
     text-align: center;
 }
 
+.sub-header {
+    font-size: 1rem;
+    color: var(--text-dim);
+    margin-bottom: 5px;
+}
+
+/* Stable container for the typewriter text */
+.title-container {
+    min-height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 h1 {
-    font-size: 3.5rem;
+    font-size: 4rem;
     font-weight: 800;
-    margin: 0;
     letter-spacing: -2px;
 }
 
-.typewriter-container {
-    font-size: 1.5rem;
-    color: var(--text-dim);
-    margin-top: 10px;
-    height: 1.5em;
-}
-
 .cursor {
-    border-right: 2px solid var(--text-main);
+    color: var(--text-main);
+    margin-left: 5px;
     animation: blink 0.7s infinite;
-    margin-left: 2px;
 }
 
-@keyframes blink {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0; }
-}
+@keyframes blink { 50% { opacity: 0; } }
 
 .links {
     margin-top: 40px;
     display: flex;
-    gap: 20px;
+    gap: 15px;
+    justify-content: center;
 }
 
-.links a {
+.btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
     color: var(--text-main);
     text-decoration: none;
     font-weight: 600;
-    padding: 10px 20px;
+    padding: 12px 24px;
     border: 1px solid var(--ui-border);
-    border-radius: 6px;
+    border-radius: 8px;
     transition: all 0.2s ease;
+    background: transparent;
 }
 
-.links a:hover {
-    background-color: var(--text-main);
+.btn:hover {
+    background: var(--text-main);
     color: var(--bg-color);
+    transform: translateY(-2px);
 }
