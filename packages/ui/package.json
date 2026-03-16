@@ -1,0 +1,9 @@
+{
+  "name": "@projects/ui",
+  "private": true,
+  "version": "0.0.0",
+  "main": "./src/index.js",
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0"
+  }
+}
