@@ -83,7 +83,7 @@ export default function App({ navigate }) {
         const syncTime = async () => {
             try {
                 const start = Date.now();
-                const response = await fetch('https://timeapi.io/api/Time/current/zone?timeZone=UTC');
+                const response = await fetch('https://timeapi.io/api/Time/current/zone?timeZone=Europe%2FLondon');
                 if (response.ok) {
                     const data = await response.json();
                     const serverTime = new Date(data.dateTime).getTime();
