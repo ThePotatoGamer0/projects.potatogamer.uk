@@ -30,7 +30,7 @@ To run this workspace locally, ensure you have **Node.js** and **fnm** (or npm) 
 
 1.  **Clone the repository**
     ```powershell
-    git clone [https://github.com/thepotatogamer0/projects.potatogamer.uk.git](https://github.com/thepotatogamer0/projects.potatogamer.uk.git)
+    git clone https://github.com/thepotatogamer0/projects.potatogamer.uk.git
     cd projects.potatogamer.uk
     ```
 
