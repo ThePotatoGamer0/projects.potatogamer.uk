@@ -13,7 +13,7 @@ This repository uses a monorepo structure to manage multiple applications and sh
 | :--- | :--- | :--- | :--- |
 | **`apps/time`** | A high-performance, customizable school timetable and countdown app with dynamic themes (including the secret "Stars" theme). | React, Vite, GSAP | Live 🟢 |
 
-### 🛠️ Packages (Planned)
+### 🛠️ Packages
 | Name | Description |
 | :--- | :--- |
 | **`packages/ui`** | Shared React components and universal loaders used across the ecosystem. |
@@ -22,7 +22,6 @@ This repository uses a monorepo structure to manage multiple applications and sh
 
 * **Frontend:** HTML, CSS, JavaScript, React, Vite.
 * **Languages:** PHP, Python (for backend services and automation).
-* **Home Lab:** Hosted and tested on a **Raspberry Pi 5 (16GB RAM)** with a **1TB NVMe SSD** running **Pi OS Lite**.
 * **Development:** Primary development performed on **Windows 11**.
 
 ## 🚀 Local Development
