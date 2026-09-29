@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import iro from '@jaames/iro';
 import { USER_TIMETABLES } from './constants/users';
+import { PERIODS_LONG, PERIODS_SHORT, PERIODS_HALF } from './constants/periods';
 import { LoadingScreen } from '@projects/ui';
 import './App.css';
 
@@ -197,17 +198,19 @@ export default function Settings({ navigate }) {
         if (!user) return <p>User not found.</p>;
 
         const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-        const periodTimesLong = { "0": "09:10", "1": "09:25", "2": "10:05", "Break": "10:45", "3": "11:00", "4": "11:40", "5": "12:20", "6": "13:00", "7": "13:35", "8": "14:10", "9": "14:50" };
-        const periodTimesShort = { "0": "09:10", "1": "09:25", "2": "10:05", "3": "10:45", "4": "11:25", "5": "12:05", "6": "12:45", "7": "13:25" };
 
         return days.map((dayName, i) => {
             const dayNum = i + 1;
             const classes = user.timetable[dayNum];
-            if (!classes) return null;
+            
+            // Skip rendering empty days
+            if (!classes || Object.keys(classes).length === 0) return null;
 
-            const isShort = (dayNum === 3 || dayNum === 5);
-            const order = isShort ? ['0', '1', '2', '3', '4', '5', '6', '7'] : ['0', '1', '2', 'Break', '3', '4', '5', '6', '7', '8', '9'];
-            const times = isShort ? periodTimesShort : periodTimesLong;
+            let schedule;
+            if (dayNum === 1) schedule = PERIODS_LONG;
+            else if (dayNum === 2 || dayNum === 3) schedule = PERIODS_HALF;
+            else if (dayNum === 5) schedule = PERIODS_SHORT;
+            else return null;
 
             return (
                 <div key={dayNum}>
@@ -215,10 +218,12 @@ export default function Settings({ navigate }) {
                     <table className="tt-table">
                         <thead><tr><th>Time</th><th>Period</th><th>Class</th></tr></thead>
                         <tbody>
-                            {order.map(p => {
-                                if (p === 'Break') return <tr key={p} className="tt-break-row"><td>{times[p]}</td><td colSpan="2" className="break-label">BREAK</td></tr>;
-                                if (!classes[p]) return null;
-                                return <tr key={p}><td>{times[p]}</td><td>{p}</td><td>{classes[p]}</td></tr>;
+                            {schedule.map(p => {
+                                if (p.type === 'break') {
+                                    return <tr key={p.id} className="tt-break-row"><td>{p.start}</td><td colSpan="2" className="break-label">BREAK</td></tr>;
+                                }
+                                if (!classes[p.id]) return null;
+                                return <tr key={p.id}><td>{p.start}</td><td>{p.id}</td><td>{classes[p.id]}</td></tr>;
                             })}
                         </tbody>
                     </table>

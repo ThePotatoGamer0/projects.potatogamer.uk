@@ -1,7 +1,7 @@
 // src/App.jsx
 import { useEffect, useState, useRef, useCallback } from 'react';
 import gsap from 'gsap';
-import { PERIODS_LONG, PERIODS_SHORT } from './constants/periods';
+import { PERIODS_LONG, PERIODS_SHORT, PERIODS_HALF } from './constants/periods';
 import { USER_TIMETABLES } from './constants/users';
 import Stars from './Stars';
 import { LoadingScreen } from '@projects/ui';
@@ -185,12 +185,16 @@ export default function App({ navigate }) {
             }
 
             const currentMins = Math.floor(currentMs / 60000);
-            const schedule = (day === 0 || day === 6) ? null : ((day === 3 || day === 5) ? PERIODS_SHORT : PERIODS_LONG);
+            
+            let schedule = null;
+            if (day === 1) schedule = PERIODS_LONG;
+            else if (day === 2 || day === 3) schedule = PERIODS_HALF;
+            else if (day === 5) schedule = PERIODS_SHORT;
             
             if (!schedule) {
-                setStatusLabel("Weekend");
+                setStatusLabel((day === 0 || day === 6) ? "Weekend" : "Free Day");
                 updateRollingTimer(classTimerRef, "OFF", 'time-until-class', animMode);
-                document.title = "Weekend | potatogamer.uk";
+                document.title = (day === 0 || day === 6) ? "Weekend | potatogamer.uk" : "Free Day | potatogamer.uk";
                 return;
             }
 
