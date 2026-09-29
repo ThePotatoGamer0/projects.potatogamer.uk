@@ -6,7 +6,7 @@
  */
 export const USER_TIMETABLES = {
   "user1": {
-    "name": "James",
+    "name": "Class-AB1 (OCR ICT Level 3)",
     "timetable": {
       "1": { "0": "Web design", "1": "Web design", "2": "Global Information", "3": "Fundamentals of IT" },
       "2": { "0": "Fundamentals of IT", "1": "Fundamentals of IT" },
