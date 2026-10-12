@@ -1,0 +1,13 @@
+name = "time-timetables"
+main = "src/index.js"
+compatibility_date = "2026-01-01"
+
+# Custom timetables that do not fit in a bookmark URL are stored here.
+# Create the namespace, replace the id, then:
+#   npx wrangler kv namespace create TIMETABLES
+#   npx wrangler deploy
+# Point the time app at the worker with VITE_TIMETABLE_KV_URL.
+
+[[kv_namespaces]]
+binding = "TIMETABLES"
+id = "replace-with-kv-namespace-id"
