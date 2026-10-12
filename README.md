@@ -11,7 +11,7 @@ This repository uses a monorepo structure to manage multiple applications and sh
 ### 📦 Apps
 | Name | Description | Tech Stack | Status |
 | :--- | :--- | :--- | :--- |
-| **`apps/time`** | A high-performance, customizable school timetable and countdown app with dynamic themes (including the secret "Stars" theme). | React, Vite, GSAP | Live 🟢 |
+| **`apps/time`** | A countdown for flexible timetables. Presets and custom schedules stay in the URL so a bookmark keeps the setup, with Cloudflare KV when a timetable is too large for the link. | React, Vite, GSAP | Live 🟢 |
 
 ### 🛠️ Packages
 | Name | Description |

@@ -1,79 +1,95 @@
-// src/Settings.jsx
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import iro from '@jaames/iro';
-import { USER_TIMETABLES } from './constants/users';
-import { PERIODS_LONG, PERIODS_SHORT, PERIODS_HALF } from './constants/periods';
+import TimetableEditor, { TimetablePreview } from './components/TimetableEditor';
+import { forgetDevOverrides, commitPrefs } from './lib/prefs';
+import { applyAppearance, resolveColors } from './lib/theme';
+import { DAY_IDS, cloneTimetable, emptyTimetable, getPreset, listPresets, normalizeTimetable, validateTimetable } from './lib/timetable';
+import { useTimePrefs } from './lib/useTimePrefs';
 import { LoadingScreen } from '@projects/ui';
 import './App.css';
 
+const PRESETS = listPresets();
+
 export default function Settings({ navigate }) {
-    const params = new URLSearchParams(window.location.search);
-    
-    // Check if the app has already loaded in this browser session
+    const { prefs, timetable, loadError } = useTimePrefs();
     const [isLoading, setIsLoading] = useState(!window.__TIME_APP_LOADED__);
     const [isExiting, setIsExiting] = useState(false);
-    
-    // Modal States
     const [showHomeModal, setShowHomeModal] = useState(false);
     const [showDevModal, setShowDevModal] = useState(false);
     const [showStarsModal, setShowStarsModal] = useState(false);
-
-    // UI State
     const [activeTab, setActiveTab] = useState('theme');
-    const [applyStatus, setApplyStatus] = useState(0); 
-    
-    // Settings State
-    const [preset, setPreset] = useState(params.get('t') || 'custom');
-    const [bgColor, setBgColor] = useState(`#${params.get('bg') || '000000'}`);
-    const [txtColor, setTxtColor] = useState(`#${params.get('txt') || 'ffffff'}`);
-    const [selectedUser, setSelectedUser] = useState(params.get('u') || 'user1');
-    const [animLevel, setAnimLevel] = useState(params.get('anim') || 'full');
-    
-    // Dev State
-    const [devTime, setDevTime] = useState(params.get('devt') || '');
-    const [devDay, setDevDay] = useState(params.get('devd') || '');
-    const [devUnlocked, setDevUnlocked] = useState(params.get('dev') === '1');
-    const [starsUnlocked, setStarsUnlocked] = useState(params.get('t') === 'stars');
+    const [saving, setSaving] = useState(false);
+    const [saveMessage, setSaveMessage] = useState('');
+    const [issues, setIssues] = useState([]);
 
-    // Refs
+    const [preset, setPreset] = useState(prefs.theme || 'custom');
+    const [bgColor, setBgColor] = useState(`#${prefs.bg || '000000'}`);
+    const [txtColor, setTxtColor] = useState(`#${prefs.txt || 'ffffff'}`);
+    const [selectedUser, setSelectedUser] = useState(prefs.userId);
+    const [mode, setMode] = useState(prefs.mode);
+    const [custom, setCustom] = useState(() => (
+        prefs.mode === 'custom' && prefs.timetable ? cloneTimetable(prefs.timetable) : emptyTimetable()
+    ));
+    const [animLevel, setAnimLevel] = useState(prefs.anim || 'full');
+    const [devTime, setDevTime] = useState(prefs.devTime || '');
+    const [devDay, setDevDay] = useState(prefs.devDay || '');
+    const [devUnlocked, setDevUnlocked] = useState(prefs.dev);
+    const [starsUnlocked, setStarsUnlocked] = useState(prefs.starsUnlocked);
+
     const bgWheelRef = useRef(null);
     const txtWheelRef = useRef(null);
-    const bgPicker = useRef(null);
-    const txtPicker = useRef(null);
+    const colorSeed = useRef({ bg: `#${prefs.bg || '000000'}`.toLowerCase(), txt: `#${prefs.txt || 'ffffff'}`.toLowerCase() });
     const themeClickCount = useRef(0);
     const devClickCount = useRef(0);
+    const edited = useRef(false);
 
-    // Entry Transition Effect
+    const previewTimetable = useMemo(() => getPreset(selectedUser), [selectedUser]);
+    const colors = resolveColors({ theme: preset, bg: bgColor, txt: txtColor });
+
     useEffect(() => {
-        if (!window.__TIME_APP_LOADED__) {
-            const timer = setTimeout(() => {
-                setIsLoading(false);
-                window.__TIME_APP_LOADED__ = true;
-            }, 800);
-            return () => clearTimeout(timer);
-        }
+        if (window.__TIME_APP_LOADED__) return undefined;
+        const timer = setTimeout(() => {
+            setIsLoading(false);
+            window.__TIME_APP_LOADED__ = true;
+        }, 800);
+        return () => clearTimeout(timer);
     }, []);
 
-    // Initialize Color Pickers
     useEffect(() => {
-        if (!bgWheelRef.current || !txtWheelRef.current) return;
+        if (edited.current || prefs.mode !== 'custom' || !timetable) return;
+        setCustom(cloneTimetable(timetable));
+    }, [prefs.mode, timetable]);
 
-        bgWheelRef.current.innerHTML = '';
-        txtWheelRef.current.innerHTML = '';
-
-        bgPicker.current = new iro.ColorPicker(bgWheelRef.current, { width: 150, color: bgColor });
-        txtPicker.current = new iro.ColorPicker(txtWheelRef.current, { width: 150, color: txtColor });
-
-        bgPicker.current.on('color:change', (color) => {
-            setPreset('custom');
-            setBgColor(color.hexString);
-        });
-
-        txtPicker.current.on('color:change', (color) => {
-            setPreset('custom');
-            setTxtColor(color.hexString);
-        });
+    useEffect(() => {
+        const bgNode = bgWheelRef.current;
+        const txtNode = txtWheelRef.current;
+        if (!bgNode || !txtNode) return undefined;
+        bgNode.replaceChildren();
+        txtNode.replaceChildren();
+        const bgPicker = new iro.ColorPicker(bgNode, { width: 150, color: colorSeed.current.bg });
+        const txtPicker = new iro.ColorPicker(txtNode, { width: 150, color: colorSeed.current.txt });
+        const watch = (picker, key, setColor) => {
+            picker.on('color:change', (color) => {
+                const next = color.hexString.toLowerCase();
+                if (next === colorSeed.current[key]) return;
+                colorSeed.current[key] = next;
+                setPreset('custom');
+                setColor(color.hexString);
+            });
+        };
+        watch(bgPicker, 'bg', setBgColor);
+        watch(txtPicker, 'txt', setTxtColor);
+        return () => {
+            bgNode.replaceChildren();
+            txtNode.replaceChildren();
+        };
     }, []);
+
+    const editCustom = (next) => {
+        edited.current = true;
+        setCustom(next);
+        setSaveMessage('');
+    };
 
     const handleTitleClick = () => {
         devClickCount.current += 1;
@@ -93,302 +109,241 @@ export default function Settings({ navigate }) {
         }
     };
 
-    const handleOtherTabClick = (tab) => {
-        setActiveTab(tab);
-        themeClickCount.current = 0; 
+    const usePresetCopy = () => {
+        const hasBlocks = DAY_IDS.some((day) => custom.days[day]?.length);
+        if (hasBlocks && !window.confirm('Replace your custom timetable with a copy of this preset?')) return;
+        edited.current = true;
+        setCustom(cloneTimetable(previewTimetable));
+        setMode('custom');
+        setIssues([]);
+        setSaveMessage('');
     };
 
-    const saveSettings = () => {
-        const newParams = new URLSearchParams();
-        
-        newParams.set('bg', bgColor.replace('#', ''));
-        newParams.set('txt', txtColor.replace('#', ''));
-        newParams.set('t', preset);
-        newParams.set('u', selectedUser);
-        
-        if (animLevel !== 'full') newParams.set('anim', animLevel);
-        if (devUnlocked) newParams.set('dev', '1');
-        if (devTime) newParams.set('devt', devTime);
-        if (devDay) newParams.set('devd', devDay);
-
-        const newURL = `${window.location.pathname}?${newParams.toString()}`;
-        window.history.pushState({}, '', newURL);
-
-        if (preset === 'stars') {
-            document.body.classList.add('theme-stars');
-            document.documentElement.style.setProperty('--bg-color', '#020111');
-            document.documentElement.style.setProperty('--text-main', '#ffffff');
-        } else {
-            document.body.classList.remove('theme-stars'); 
-            
-            const presetsMap = {
-                dark: { bg: '#000000', txt: '#ffffff' },
-                light: { bg: '#ffffff', txt: '#000000' },
-                luxury: { bg: '#1a2e35', txt: '#ffcc00' }
-            };
-
-            if (preset === 'custom') {
-                document.documentElement.style.setProperty('--bg-color', bgColor);
-                document.documentElement.style.setProperty('--text-main', txtColor);
-            } else if (presetsMap[preset]) {
-                document.documentElement.style.setProperty('--bg-color', presetsMap[preset].bg);
-                document.documentElement.style.setProperty('--text-main', presetsMap[preset].txt);
-            }
+    const saveSettings = async () => {
+        const nextIssues = mode === 'custom' ? validateTimetable(custom) : [];
+        setIssues(nextIssues);
+        if (nextIssues.some((issue) => !issue.overlap)) {
+            setSaveMessage('Fix the block times before saving.');
+            setActiveTab('timetable');
+            return;
         }
 
-        setApplyStatus(1);
-        setTimeout(() => setApplyStatus(0), 2000);
+        setSaving(true);
+        try {
+            const result = await commitPrefs({
+                theme: preset,
+                bg: bgColor,
+                txt: txtColor,
+                anim: animLevel,
+                dev: devUnlocked,
+                devTime,
+                devDay,
+                starsUnlocked,
+                mode,
+                userId: selectedUser,
+                timetable: mode === 'custom' ? normalizeTimetable(custom) : null,
+            });
+            applyAppearance({ theme: preset, bg: bgColor, txt: txtColor, anim: animLevel });
+            const overlap = nextIssues.some((issue) => issue.overlap);
+            setSaveMessage(overlap ? `${result.message} Overlapping blocks were kept.` : result.message);
+        } finally {
+            setSaving(false);
+        }
     };
 
     const clearDevOverrides = () => {
         setDevTime('');
         setDevDay('');
-        const p = new URLSearchParams(window.location.search);
-        p.delete('devt');
-        p.delete('devd');
-        window.history.pushState({}, '', `${window.location.pathname}?${p.toString()}`);
+        forgetDevOverrides();
     };
 
-    const goBack = () => {
-        navigate(`/time${window.location.search}`); 
-    };
-
-    const handleExternalNavigation = (e, url) => {
-        e.preventDefault();
+    const handleExternalNavigation = (event, url) => {
+        event.preventDefault();
         setIsExiting(true);
         setTimeout(() => {
             window.location.href = url;
         }, 400);
     };
 
-    // Reusable Icon Links Component
     const renderIconLinks = (className) => (
         <div className={className}>
-            <a onClick={() => setShowHomeModal(true)} title="Return to Main Site" style={{ color: 'var(--text-dim)', transition: 'color 0.2s', cursor: 'pointer' }} onMouseEnter={(e) => e.target.style.color = 'var(--text-main)'} onMouseLeave={(e) => e.target.style.color = 'var(--text-dim)'}>
+            <a onClick={() => setShowHomeModal(true)} title="Return to Main Site" style={{ color: 'var(--text-dim)', transition: 'color 0.2s', cursor: 'pointer' }} onMouseEnter={(event) => { event.currentTarget.style.color = 'var(--text-main)'; }} onMouseLeave={(event) => { event.currentTarget.style.color = 'var(--text-dim)'; }}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                    <polyline points="9 22 9 12 15 12 15 22" />
                 </svg>
             </a>
-            <a href="https://github.com/thepotatogamer0/time" target="_blank" rel="noreferrer" title="GitHub Repository" style={{ color: 'var(--text-dim)', transition: 'color 0.2s', cursor: 'pointer' }} onMouseEnter={(e) => e.target.style.color = 'var(--text-main)'} onMouseLeave={(e) => e.target.style.color = 'var(--text-dim)'}>
+            <a href="https://github.com/thepotatogamer0/time" target="_blank" rel="noreferrer" title="GitHub Repository" style={{ color: 'var(--text-dim)', transition: 'color 0.2s', cursor: 'pointer' }} onMouseEnter={(event) => { event.currentTarget.style.color = 'var(--text-main)'; }} onMouseLeave={(event) => { event.currentTarget.style.color = 'var(--text-dim)'; }}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                    <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
                 </svg>
             </a>
-            <a href="https://react.dev/" target="_blank" rel="noreferrer" title="React" style={{ color: 'var(--text-dim)', transition: 'color 0.2s', cursor: 'pointer' }} onMouseEnter={(e) => e.target.style.color = '#61dafb'} onMouseLeave={(e) => e.target.style.color = 'var(--text-dim)'}>
+            <a href="https://react.dev/" target="_blank" rel="noreferrer" title="React" style={{ color: 'var(--text-dim)', transition: 'color 0.2s', cursor: 'pointer' }} onMouseEnter={(event) => { event.currentTarget.style.color = '#61dafb'; }} onMouseLeave={(event) => { event.currentTarget.style.color = 'var(--text-dim)'; }}>
                 <svg width="24" height="24" viewBox="-11.5 -10.23174 23 20.46348" fill="currentColor">
-                  <circle cx="0" cy="0" r="2.05" fill="currentColor"/>
-                  <g stroke="currentColor" strokeWidth="1" fill="none">
-                    <ellipse rx="11" ry="4.2"/>
-                    <ellipse rx="11" ry="4.2" transform="rotate(60)"/>
-                    <ellipse rx="11" ry="4.2" transform="rotate(120)"/>
-                  </g>
+                    <circle cx="0" cy="0" r="2.05" fill="currentColor" />
+                    <g stroke="currentColor" strokeWidth="1" fill="none">
+                        <ellipse rx="11" ry="4.2" />
+                        <ellipse rx="11" ry="4.2" transform="rotate(60)" />
+                        <ellipse rx="11" ry="4.2" transform="rotate(120)" />
+                    </g>
                 </svg>
             </a>
-            <a href="https://vitejs.dev/" target="_blank" rel="noreferrer" title="Vite" style={{ color: 'var(--text-dim)', transition: 'color 0.2s', cursor: 'pointer' }} onMouseEnter={(e) => e.target.style.color = '#646cff'} onMouseLeave={(e) => e.target.style.color = 'var(--text-dim)'}>
+            <a href="https://vitejs.dev/" target="_blank" rel="noreferrer" title="Vite" style={{ color: 'var(--text-dim)', transition: 'color 0.2s', cursor: 'pointer' }} onMouseEnter={(event) => { event.currentTarget.style.color = '#646cff'; }} onMouseLeave={(event) => { event.currentTarget.style.color = 'var(--text-dim)'; }}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M2.388 4.672L11.535 21.8c.206.386.75.385.955 0L21.611 4.672c.196-.367-.184-.77-.552-.586l-9.06 4.53-9.059-4.53c-.368-.184-.748.22-.552.586z"/>
+                    <path d="M2.388 4.672L11.535 21.8c.206.386.75.385.955 0L21.611 4.672c.196-.367-.184-.77-.552-.586l-9.06 4.53-9.059-4.53c-.368-.184-.748.22-.552.586z" />
                 </svg>
             </a>
         </div>
     );
 
-    const renderTimetable = () => {
-        const user = USER_TIMETABLES[selectedUser];
-        if (!user) return <p>User not found.</p>;
-
-        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-
-        return days.map((dayName, i) => {
-            const dayNum = i + 1;
-            const classes = user.timetable[dayNum];
-            
-            // Skip rendering empty days
-            if (!classes || Object.keys(classes).length === 0) return null;
-
-            let schedule;
-            if (dayNum === 1) schedule = PERIODS_LONG;
-            else if (dayNum === 2 || dayNum === 3) schedule = PERIODS_HALF;
-            else if (dayNum === 5) schedule = PERIODS_SHORT;
-            else return null;
-
-            return (
-                <div key={dayNum}>
-                    <div className="tt-day-header">{dayName}</div>
-                    <table className="tt-table">
-                        <thead><tr><th>Time</th><th>Period</th><th>Class</th></tr></thead>
-                        <tbody>
-                            {schedule.map(p => {
-                                if (p.type === 'break') {
-                                    return <tr key={p.id} className="tt-break-row"><td>{p.start}</td><td colSpan="2" className="break-label">BREAK</td></tr>;
-                                }
-                                if (!classes[p.id]) return null;
-                                return <tr key={p.id}><td>{p.start}</td><td>{p.id}</td><td>{classes[p.id]}</td></tr>;
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-            );
-        });
-    };
-
-    const previewBg = preset === 'custom' ? bgColor : (preset === 'dark' ? '#000000' : preset === 'light' ? '#ffffff' : preset === 'luxury' ? '#1a2e35' : '#020111');
-    const previewTxt = preset === 'custom' ? txtColor : (preset === 'dark' ? '#ffffff' : preset === 'light' ? '#000000' : preset === 'luxury' ? '#ffcc00' : '#ffffff');
-
     return (
         <>
             <LoadingScreen isVisible={isLoading || isExiting} />
-            
-            {/* Navigational Warning Modal */}
+
             {showHomeModal && (
-                <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000, padding: '20px', boxSizing: 'border-box' }}>
-                    <div style={{ backgroundColor: 'var(--bg-color)', border: '1px solid var(--ui-border)', padding: '30px', borderRadius: '12px', maxWidth: '400px', textAlign: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
-                        <h3 style={{ marginTop: 0, color: 'var(--text-main)' }}>Don't lose your settings!</h3>
-                        <p style={{ color: 'var(--text-dim)', fontSize: '0.9rem', marginBottom: '25px', lineHeight: '1.5' }}>
-                            Your setup is saved directly in this URL. Make sure you <strong>bookmark this page</strong> or copy the link before leaving the Time App, otherwise your customizations will be lost.
-                        </p>
-                        <div style={{ display: 'flex', gap: '15px', justifyContent: 'center' }}>
-                            <button onClick={() => setShowHomeModal(false)} style={{ padding: '10px 20px', borderRadius: '6px', background: 'transparent', border: '1px solid var(--ui-border)', color: 'var(--text-main)', cursor: 'pointer', fontWeight: 'bold' }}>Cancel</button>
-                            <button onClick={(e) => { setShowHomeModal(false); handleExternalNavigation(e, '/'); }} style={{ padding: '10px 20px', borderRadius: '6px', background: 'var(--text-main)', border: 'none', color: 'var(--bg-color)', cursor: 'pointer', fontWeight: 'bold' }}>Leave</button>
+                <div className="modal-scrim">
+                    <div className="modal-card">
+                        <h3>Don&apos;t lose your settings</h3>
+                        <p>Your setup is saved in this URL. Bookmark the page or copy the link before leaving, otherwise a custom timetable that is only on this device will stay behind.</p>
+                        <div className="modal-actions">
+                            <button type="button" className="ghost-btn" onClick={() => setShowHomeModal(false)}>Cancel</button>
+                            <button type="button" className="primary-btn" onClick={(event) => { setShowHomeModal(false); handleExternalNavigation(event, '/'); }}>Leave</button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Developer Mode Easter Egg Modal */}
             {showDevModal && (
-                <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000, padding: '20px', boxSizing: 'border-box' }}>
-                    <div style={{ backgroundColor: 'var(--bg-color)', border: '1px dashed #ff5555', padding: '30px', borderRadius: '12px', maxWidth: '400px', textAlign: 'center', boxShadow: '0 10px 30px rgba(255,85,85,0.2)' }}>
-                        <h3 style={{ marginTop: 0, color: '#ff5555' }}>Developer Mode Unlocked! 🛠️</h3>
-                        <p style={{ color: 'var(--text-dim)', fontSize: '0.9rem', marginBottom: '25px', lineHeight: '1.5' }}>
-                            You now have access to advanced developer tools and time overrides. Use them wisely!
-                        </p>
-                        <button onClick={() => setShowDevModal(false)} style={{ padding: '10px 20px', borderRadius: '6px', background: '#ff5555', border: 'none', color: '#fff', cursor: 'pointer', fontWeight: 'bold' }}>Got it</button>
+                <div className="modal-scrim">
+                    <div className="modal-card modal-card-dev">
+                        <h3>Developer mode unlocked</h3>
+                        <p>Time and day overrides are now in the developer tab. They travel with the link, so clear them before sharing.</p>
+                        <button type="button" className="primary-btn danger-btn" onClick={() => setShowDevModal(false)}>Got it</button>
                     </div>
                 </div>
             )}
 
-            {/* Stars Theme Easter Egg Modal */}
             {showStarsModal && (
-                <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000, padding: '20px', boxSizing: 'border-box' }}>
-                    <div style={{ backgroundColor: '#020111', border: '1px solid #444', padding: '30px', borderRadius: '12px', maxWidth: '400px', textAlign: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.8)' }}>
-                        <h3 style={{ marginTop: 0, color: '#fff' }}>Achievement Unlocked! 🚀</h3>
-                        <p style={{ color: '#aaa', fontSize: '0.9rem', marginBottom: '25px', lineHeight: '1.5' }}>
-                            You've discovered the secret Space Traveler theme. It has been unlocked and added to your theme presets.
-                        </p>
-                        <button onClick={() => setShowStarsModal(false)} style={{ padding: '10px 20px', borderRadius: '6px', background: '#fff', border: 'none', color: '#000', cursor: 'pointer', fontWeight: 'bold' }}>Awesome</button>
+                <div className="modal-scrim">
+                    <div className="modal-card modal-card-stars">
+                        <h3>Space theme unlocked</h3>
+                        <p>Stars is now in the theme list. Apply changes to keep it in the link.</p>
+                        <button type="button" className="primary-btn" onClick={() => setShowStarsModal(false)}>Awesome</button>
                     </div>
                 </div>
             )}
 
             <div className="settings-wrapper">
-                
                 <div className="sidebar">
                     <div className="sidebar-header">
-                        <button className="back-arrow" onClick={goBack} title="Return to Main Page" style={{ background: 'none', border: 'none', color: 'var(--text-main)', cursor: 'pointer', padding: '5px' }}>
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ width: '20px', height: '20px' }}><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                        <button className="back-arrow" type="button" onClick={() => navigate(`/time${window.location.search}`)} title="Return to the clock">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ width: '20px', height: '20px' }}><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
                         </button>
-                        <h2 onClick={handleTitleClick} title="Click 5 times for Dev Menu" style={{ fontSize: '1.2rem', margin: 0, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '1px', cursor: 'pointer' }}>Settings</h2>
+                        <h2 onClick={handleTitleClick} title="Click 5 times for Dev Menu">Settings</h2>
                     </div>
-                    
-                    <button className={`tab-btn ${activeTab === 'theme' ? 'active' : ''}`} onClick={handleThemeTabClick}>Theme</button>
-                    <button className={`tab-btn ${activeTab === 'timetable' ? 'active' : ''}`} onClick={() => handleOtherTabClick('timetable')}>Timetable</button>
-                    <button className={`tab-btn ${activeTab === 'accessibility' ? 'active' : ''}`} onClick={() => handleOtherTabClick('accessibility')}>Accessibility</button>
-                    
-                    {devUnlocked && (
-                        <button className={`tab-btn dev-tab ${activeTab === 'dev' ? 'active' : ''}`} onClick={() => handleOtherTabClick('dev')}>Developer</button>
-                    )}
 
-                    {/* Desktop Icon Footer: Hidden on mobile */}
+                    <button type="button" className={`tab-btn ${activeTab === 'theme' ? 'active' : ''}`} onClick={handleThemeTabClick}>Theme</button>
+                    <button type="button" className={`tab-btn ${activeTab === 'timetable' ? 'active' : ''}`} onClick={() => { setActiveTab('timetable'); themeClickCount.current = 0; }}>Timetable</button>
+                    <button type="button" className={`tab-btn ${activeTab === 'accessibility' ? 'active' : ''}`} onClick={() => { setActiveTab('accessibility'); themeClickCount.current = 0; }}>Accessibility</button>
+                    {devUnlocked && (
+                        <button type="button" className={`tab-btn dev-tab ${activeTab === 'dev' ? 'active' : ''}`} onClick={() => { setActiveTab('dev'); themeClickCount.current = 0; }}>Developer</button>
+                    )}
                     {renderIconLinks('sidebar-bottom-links')}
                 </div>
 
                 <div className="settings-content">
-                    
-                    {/* Theme Tab */}
-                    <div className="tab-content" style={{ display: activeTab === 'theme' ? 'block' : 'none', animation: 'fadeIn 0.3s ease', flexGrow: 1 }}>
-                        <div className="content-header" style={{ marginBottom: '30px' }}><h3 style={{ margin: 0, fontSize: '1.5rem' }}>Theme Customization</h3></div>
-                        
-                        <div className="control-group" style={{ marginBottom: '30px' }}>
-                            <label style={{ display: 'block', marginBottom: '10px', color: 'var(--text-dim)' }}>Theme Preset</label>
-                            <select value={preset} onChange={(e) => setPreset(e.target.value)} style={{ width: '100%', background: 'var(--bg-color)', color: 'var(--text-main)', border: '1px solid var(--ui-border)', padding: '10px', borderRadius: '6px' }}>
+                    <div className="tab-content" style={{ display: activeTab === 'theme' ? 'block' : 'none' }}>
+                        <div className="content-header"><h3>Theme</h3></div>
+                        <div className="field">
+                            <label htmlFor="theme-preset">Preset</label>
+                            <select id="theme-preset" className="text-input" value={preset} onChange={(event) => setPreset(event.target.value)}>
                                 <option value="custom">Custom</option>
-                                <option value="dark">Dark (Classic)</option>
+                                <option value="dark">Dark</option>
                                 <option value="light">Light</option>
                                 <option value="luxury">Luxury</option>
-                                {starsUnlocked && <option value="stars">Stars (Secret)</option>}
+                                {starsUnlocked && <option value="stars">Stars</option>}
                             </select>
                         </div>
-                        
                         <div className="color-pickers-container">
-                            <div className="picker-box" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-                                <label style={{ color: 'var(--text-dim)' }}>Background</label>
-                                <div ref={bgWheelRef}></div>
-                                <span className="hex-label" style={{ fontFamily: 'monospace', fontSize: '0.9rem', color: 'var(--text-dim)' }}>{bgColor.toUpperCase()}</span>
+                            <div className="picker-box">
+                                <label>Background</label>
+                                <div ref={bgWheelRef} />
+                                <span className="hex-label">{bgColor.toUpperCase()}</span>
                             </div>
-                            <div className="picker-box" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-                                <label style={{ color: 'var(--text-dim)' }}>Primary Text</label>
-                                <div ref={txtWheelRef}></div>
-                                <span className="hex-label" style={{ fontFamily: 'monospace', fontSize: '0.9rem', color: 'var(--text-dim)' }}>{txtColor.toUpperCase()}</span>
+                            <div className="picker-box">
+                                <label>Text</label>
+                                <div ref={txtWheelRef} />
+                                <span className="hex-label">{txtColor.toUpperCase()}</span>
                             </div>
                         </div>
-
-                        <div className="preview-box" style={{ marginTop: '40px', padding: '30px', border: '1px solid var(--ui-border)', borderRadius: '12px', textAlign: 'center', backgroundColor: previewBg, color: previewTxt }}>
-                            <div className="label" style={{ fontSize: '0.8rem', letterSpacing: '2px', opacity: 0.7 }}>LIVE PREVIEW</div>
-                            <div style={{ fontSize: '3rem', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>00:42:15.284</div>
+                        <div className="preview-box" style={{ backgroundColor: colors.bg, color: colors.txt }}>
+                            <div className="label">Live preview</div>
+                            <div className="preview-time">00:42:15</div>
                         </div>
                     </div>
 
-                    {/* Timetable Tab */}
-                    <div className="tab-content" style={{ display: activeTab === 'timetable' ? 'block' : 'none', animation: 'fadeIn 0.3s ease', flexGrow: 1 }}>
-                        <div className="content-header" style={{ marginBottom: '30px' }}><h3 style={{ margin: 0, fontSize: '1.5rem' }}>Your Timetable</h3></div>
-                        <div className="control-group" style={{ marginBottom: '30px' }}>
-                            <label style={{ display: 'block', marginBottom: '10px', color: 'var(--text-dim)' }}>Select User</label>
-                            <select value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)} style={{ width: '100%', background: 'var(--bg-color)', color: 'var(--text-main)', border: '1px solid var(--ui-border)', padding: '10px', borderRadius: '6px' }}>
-                                {Object.entries(USER_TIMETABLES).map(([id, user]) => (
-                                    <option key={id} value={id}>{user.name}</option>
-                                ))}
+                    <div className="tab-content" style={{ display: activeTab === 'timetable' ? 'block' : 'none' }}>
+                        <div className="content-header">
+                            <h3>Timetable</h3>
+                            <p className="hint">Add blocks at any start and end time. The link stores the timetable. If it grows too long to bookmark, it is saved in Cloudflare KV and the link keeps a short id.</p>
+                        </div>
+                        {loadError && <p className="form-error">The cloud copy of this timetable could not be loaded.</p>}
+                        <div className="field">
+                            <label htmlFor="timetable-source">Source</label>
+                            <select
+                                id="timetable-source"
+                                className="text-input"
+                                value={mode === 'custom' ? 'custom' : selectedUser}
+                                onChange={(event) => {
+                                    setSaveMessage('');
+                                    if (event.target.value === 'custom') setMode('custom');
+                                    else {
+                                        setMode('preset');
+                                        setSelectedUser(event.target.value);
+                                    }
+                                }}
+                            >
+                                {PRESETS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                                <option value="custom">Custom timetable</option>
                             </select>
                         </div>
-                        <div id="timetable-container">
-                            {renderTimetable()}
-                        </div>
+
+                        {mode === 'custom' ? (
+                            <TimetableEditor value={custom} onChange={editCustom} issues={issues} />
+                        ) : (
+                            <>
+                                <TimetablePreview timetable={previewTimetable} />
+                                <button type="button" className="ghost-btn" onClick={usePresetCopy}>Edit a copy</button>
+                            </>
+                        )}
                     </div>
 
-                    {/* Accessibility Tab */}
-                    <div className="tab-content" style={{ display: activeTab === 'accessibility' ? 'block' : 'none', animation: 'fadeIn 0.3s ease', flexGrow: 1 }}>
-                        <div className="content-header" style={{ marginBottom: '30px' }}><h3 style={{ margin: 0, fontSize: '1.5rem' }}>Accessibility</h3></div>
-                        <div className="control-group" style={{ marginBottom: '30px' }}>
-                            <label style={{ display: 'block', marginBottom: '10px', color: 'var(--text-dim)' }}>Animation Level</label>
-                            <select value={animLevel} onChange={(e) => setAnimLevel(e.target.value)} style={{ width: '100%', background: 'var(--bg-color)', color: 'var(--text-main)', border: '1px solid var(--ui-border)', padding: '10px', borderRadius: '6px' }}>
-                                <option value="full">Full (Default)</option>
-                                <option value="minimal">Minimal (No Rolling Numbers)</option>
-                                <option value="none">None (No Animations)</option>
+                    <div className="tab-content" style={{ display: activeTab === 'accessibility' ? 'block' : 'none' }}>
+                        <div className="content-header"><h3>Accessibility</h3></div>
+                        <div className="field">
+                            <label htmlFor="anim-level">Animation</label>
+                            <select id="anim-level" className="text-input" value={animLevel} onChange={(event) => setAnimLevel(event.target.value)}>
+                                <option value="full">Full</option>
+                                <option value="minimal">Minimal</option>
+                                <option value="none">None</option>
                             </select>
-                            <p style={{ color: 'var(--text-dim)', marginTop: '15px', fontSize: '0.9rem', lineHeight: 1.5 }}>
-                                <strong>Full:</strong> All visual effects enabled.<br/>
-                                <strong>Minimal:</strong> Disables rolling numbers but keeps interface transitions.<br/>
-                                <strong>None:</strong> Removes all animations.
-                            </p>
+                            <p className="hint">Full rolls each digit. Minimal updates the numbers in place. None removes motion. Reduced motion on this device starts on Minimal until you change it.</p>
                         </div>
                     </div>
 
-                    {/* Developer Tab */}
-                    <div className="tab-content" style={{ display: activeTab === 'dev' ? 'block' : 'none', animation: 'fadeIn 0.3s ease', flexGrow: 1 }}>
-                        <div className="content-header" style={{ marginBottom: '30px' }}>
-                            <h3 style={{ margin: 0, fontSize: '1.5rem' }}>Developer Tools</h3>
-                            <p style={{ color: '#ff5555', marginTop: '5px', fontSize: '0.9rem' }}>⚠️ Overrides live time data</p>
+                    <div className="tab-content" style={{ display: activeTab === 'dev' ? 'block' : 'none' }}>
+                        <div className="content-header">
+                            <h3>Developer</h3>
+                            <p className="form-error">Overrides the live clock.</p>
                         </div>
-                        
-                        <div className="control-group" style={{ marginBottom: '30px' }}>
-                            <label style={{ display: 'block', marginBottom: '10px', color: 'var(--text-dim)' }}>Time Override (HH:MM:SS)</label>
-                            <input type="text" value={devTime} onChange={(e) => setDevTime(e.target.value)} placeholder="e.g. 14:30:00" style={{ width: '100%', background: 'var(--bg-color)', color: 'var(--text-main)', border: '1px solid var(--ui-border)', padding: '10px', borderRadius: '6px' }} />
+                        <div className="field">
+                            <label htmlFor="dev-time">Time override (HH:MM:SS)</label>
+                            <input id="dev-time" className="text-input" value={devTime} onChange={(event) => setDevTime(event.target.value)} placeholder="14:30:00" />
                         </div>
-
-                        <div className="control-group" style={{ marginBottom: '30px' }}>
-                            <label style={{ display: 'block', marginBottom: '10px', color: 'var(--text-dim)' }}>Day Override</label>
-                            <select value={devDay} onChange={(e) => setDevDay(e.target.value)} style={{ width: '100%', background: 'var(--bg-color)', color: 'var(--text-main)', border: '1px solid var(--ui-border)', padding: '10px', borderRadius: '6px' }}>
-                                <option value="">-- Use Live Day --</option>
+                        <div className="field">
+                            <label htmlFor="dev-day">Day override</label>
+                            <select id="dev-day" className="text-input" value={devDay} onChange={(event) => setDevDay(event.target.value)}>
+                                <option value="">Live day</option>
                                 <option value="1">Monday</option>
                                 <option value="2">Tuesday</option>
                                 <option value="3">Wednesday</option>
@@ -398,21 +353,14 @@ export default function Settings({ navigate }) {
                                 <option value="0">Sunday</option>
                             </select>
                         </div>
-
-                        <div style={{ marginTop: '30px' }}>
-                            <button onClick={clearDevOverrides} style={{ background: '#ff5555', color: 'white', border: 'none', padding: '12px 30px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Clear Overrides & Reset</button>
-                        </div>
+                        <button type="button" className="primary-btn danger-btn" onClick={clearDevOverrides}>Clear overrides</button>
                     </div>
 
-                    {/* Save Button */}
-                    <div className="action-bar" style={{ display: activeTab !== 'timetable' ? 'flex' : 'none', marginTop: 'auto', alignItems: 'center', gap: '15px', borderTop: '1px solid var(--ui-border)', paddingTop: '20px' }}>
-                        <button onClick={saveSettings} style={{ background: 'var(--text-main)', color: 'var(--bg-color)', border: 'none', padding: '12px 30px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem', boxShadow: '0 4px 0 var(--text-dim)' }}>Apply Changes</button>
-                        <span style={{ color: '#44ff44', fontSize: '0.9rem', fontWeight: 'bold', opacity: applyStatus, transition: 'opacity 0.3s' }}>Changes Applied</span>
+                    <div className="action-bar">
+                        <button type="button" className="primary-btn" onClick={saveSettings} disabled={saving}>{saving ? 'Saving' : 'Apply changes'}</button>
+                        {saveMessage && <span className="save-note">{saveMessage}</span>}
                     </div>
-
-                    {/* Mobile Icon Footer: Hidden on desktop */}
                     {renderIconLinks('content-bottom-links')}
-
                 </div>
             </div>
         </>

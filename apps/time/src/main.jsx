@@ -3,9 +3,12 @@ import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import Settings from './Settings.jsx';
+import { reflectStoredPrefs } from './lib/prefs';
 import './index.css';
 
-function AppRouter() {
+reflectStoredPrefs();
+
+export function AppRouter() {
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
   // Add a state to track when we are animating between pages
   const [isFading, setIsFading] = useState(false);

@@ -1,316 +1,357 @@
-// src/App.jsx
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
-import { PERIODS_LONG, PERIODS_SHORT, PERIODS_HALF } from './constants/periods';
-import { USER_TIMETABLES } from './constants/users';
+import { clockMs, describeRemaining, formatClock, formatDiff, timeToMs, WEEKDAYS } from './lib/time';
+import { describeClock } from './lib/timetable';
+import { createTimerRoll } from './lib/rollingTimer';
+import { useTimePrefs } from './lib/useTimePrefs';
 import Stars from './Stars';
 import { LoadingScreen } from '@projects/ui';
-import './App.css'; 
+import './App.css';
 
-// Helper functions kept outside the component to prevent recreation
-function timeToMins(t) {
-    const [h, m] = t.split(':').map(Number);
-    return h * 60 + m;
+const HeroTime = memo(function HeroTime({ timerRef, onToggle }) {
+    return (
+        <div
+            id="time-until-class"
+            className="clickable-timer"
+            ref={timerRef}
+            onClick={onToggle}
+            title="Show milliseconds"
+        />
+    );
+});
+
+const DayTime = memo(function DayTime({ timerRef, onToggle }) {
+    return (
+        <div className="sub-timers">
+            <div className="sub-box">
+                <div
+                    id="time-until-day"
+                    className="sub-value clickable-timer"
+                    ref={timerRef}
+                    onClick={onToggle}
+                    title="Show milliseconds"
+                />
+                <div className="sub-label">End of day</div>
+            </div>
+        </div>
+    );
+});
+
+function readNow(prefs, offset) {
+    const now = new Date(Date.now() + offset);
+    const devMs = timeToMs(prefs.devTime);
+    const day = prefs.devDay === '' || prefs.devDay == null || Number.isNaN(Number(prefs.devDay))
+        ? now.getDay()
+        : Number(prefs.devDay);
+    const currentMs = Number.isFinite(devMs) ? devMs : clockMs(now);
+    return { day, currentMs };
 }
 
-function formatDiff(totalMs, showMs = false) {
-    if (totalMs <= 0) return showMs ? "00:00:00.000" : "00:00:00";
-    const totalSeconds = Math.floor(totalMs / 1000);
-    const ms = Math.floor(totalMs % 1000);
-    const h = Math.floor(totalSeconds / 3600);
-    const m = Math.floor((totalSeconds % 3600) / 60);
-    const s = Math.floor(totalSeconds % 60);
-    let base = `${h > 0 ? h + ':' : ''}${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    return showMs ? `${base}.${ms.toString().padStart(3, '0')}` : base;
+function viewFrom(prefs, timetable, offset, loadError) {
+    const { day, currentMs } = readNow(prefs, offset);
+    const weekday = WEEKDAYS[day] || '';
+    const now = formatClock(currentMs);
+    if (loadError && !timetable) {
+        return {
+            mode: 'error',
+            status: 'Timetable unavailable',
+            preview: '',
+            primary: { kind: 'static', text: 'OFF', slot: 'class' },
+            secondary: null,
+            progress: null,
+            weekday,
+            now,
+        };
+    }
+    if (!timetable) {
+        return {
+            mode: 'loading',
+            status: 'Loading',
+            preview: '',
+            primary: { kind: 'static', text: '--:--', slot: 'class' },
+            secondary: null,
+            progress: null,
+            weekday,
+            now,
+        };
+    }
+    const clock = describeClock(timetable.days?.[String(day)] || [], currentMs, day);
+    return { ...clock, weekday, now };
+}
+
+function primaryText(view, currentMs, precision) {
+    if (view.primary.kind === 'static') return view.primary.text;
+    const slot = view.primary.slot === 'day' ? 'day' : 'class';
+    return formatDiff(view.primary.target - currentMs, precision[slot]);
 }
 
 export default function App({ navigate }) {
-    const params = new URLSearchParams(window.location.search);
-    const isStarsTheme = params.get('t') === 'stars';
-
-    // Check if the app has already loaded in this browser session
+    const { prefs, timetable, loadError } = useTimePrefs();
     const [isLoading, setIsLoading] = useState(!window.__TIME_APP_LOADED__);
-    const [isExiting, setIsExiting] = useState(false);
+    const [copied, setCopied] = useState(false);
+    const [view, setView] = useState(() => viewFrom(prefs, timetable, 0, loadError));
 
-    // React State for things that update infrequently
-    const [statusLabel, setStatusLabel] = useState("Status");
-    const [previewLabel, setPreviewLabel] = useState("");
-    const [isDevMode, setIsDevMode] = useState(false);
-    
-    // Mutable refs for tracking fast-changing data without causing React re-renders
     const timeOffsetRef = useRef(0);
-    const precisionRef = useRef({
-        'time-until-class': false,
-        'time-until-period': false,
-        'time-until-day': false
-    });
-    const lastStringsRef = useRef({
-        'time-until-class': '',
-        'time-until-period': '',
-        'time-until-day': ''
-    });
-
-    // DOM Refs to target the timer elements directly
+    const prefsRef = useRef(prefs);
+    const timetableRef = useRef(timetable);
+    const loadErrorRef = useRef(loadError);
+    const viewRef = useRef(view);
+    const precisionRef = useRef({ class: false, day: false });
+    const lastStringsRef = useRef({ class: '', day: '' });
+    const titleRef = useRef('');
     const classTimerRef = useRef(null);
-    const periodTimerRef = useRef(null);
     const dayTimerRef = useRef(null);
+    const progressRef = useRef(null);
+    const tickRef = useRef(() => {});
+    const rollsRef = useRef(null);
 
-    // Entry Transition Effect (Only runs if not already loaded)
+    useLayoutEffect(() => {
+        prefsRef.current = prefs;
+        timetableRef.current = timetable;
+        loadErrorRef.current = loadError;
+        viewRef.current = view;
+    });
+
     useEffect(() => {
-        if (!window.__TIME_APP_LOADED__) {
-            const timer = setTimeout(() => {
-                setIsLoading(false);
-                window.__TIME_APP_LOADED__ = true; // Mark as loaded for future navigation
-            }, 800);
-            return () => clearTimeout(timer);
-        }
+        if (window.__TIME_APP_LOADED__) return undefined;
+        const timer = setTimeout(() => {
+            setIsLoading(false);
+            window.__TIME_APP_LOADED__ = true;
+        }, 800);
+        return () => clearTimeout(timer);
     }, []);
 
-    // Helper for bridging to OTHER apps (like going back to Home)
-    const handleExternalNavigation = (e, url) => {
-        e.preventDefault();
-        setIsExiting(true);
-        setTimeout(() => {
-            window.location.href = url;
-        }, 400);
-    };
-
-    // Initial Setup (Time Sync & Themes)
     useEffect(() => {
-        const urlParams = new URLSearchParams(window.location.search);
-        
-        // Sync Time - CORS-friendly API with a silent fallback
         const syncTime = async () => {
             try {
                 const start = Date.now();
                 const response = await fetch('https://timeapi.io/api/Time/current/zone?timeZone=Europe%2FLondon');
-                if (response.ok) {
-                    const data = await response.json();
-                    const serverTime = new Date(data.dateTime).getTime();
-                    timeOffsetRef.current = serverTime - (start + (Date.now() - start) / 2);
-                }
-            } catch (e) { 
-                console.log("Using local system time (API sync skipped)."); 
+                if (!response.ok) return;
+                const data = await response.json();
+                const serverTime = new Date(data.dateTime).getTime();
+                timeOffsetRef.current = serverTime - (start + (Date.now() - start) / 2);
+            } catch {
+                timeOffsetRef.current = 0;
             }
         };
         syncTime();
-
-        // Theme Init
-        const theme = urlParams.get('t');
-        const bg = urlParams.get('bg');
-        const txt = urlParams.get('txt');
-        const presets = {
-            dark: { bg: '000000', txt: 'ffffff' },
-            light: { bg: 'ffffff', txt: '000000' },
-            luxury: { bg: '1a2e35', txt: 'ffcc00' },
-            stars: { bg: '020111', txt: 'ffffff' }
-        };
-
-        if (theme && presets[theme]) {
-            document.documentElement.style.setProperty('--bg-color', `#${presets[theme].bg}`);
-            document.documentElement.style.setProperty('--text-main', `#${presets[theme].txt}`);
-            if (theme === 'stars') document.body.classList.add('theme-stars');
-        } else if (theme === 'custom' && bg && txt) {
-            document.documentElement.style.setProperty('--bg-color', `#${bg}`);
-            document.documentElement.style.setProperty('--text-main', `#${txt}`);
-        }
-
-        if (urlParams.get('devt') || urlParams.get('devd')) {
-            setIsDevMode(true);
-        }
     }, []);
 
-    // Performant GSAP Update Function
-    const updateRollingTimer = useCallback((domRef, newStr, id, animMode) => {
-        const container = domRef.current;
+    const updateRollingTimer = useCallback((container, nextText, id) => {
         if (!container) return;
-        
-        const oldStr = lastStringsRef.current[id];
-        if (oldStr === newStr) return;
-
-        if (precisionRef.current[id] || animMode !== 'full') {
-            container.innerText = newStr;
-            lastStringsRef.current[id] = newStr;
+        const previous = lastStringsRef.current[id];
+        if (previous === nextText && container.textContent) return;
+        const anim = prefsRef.current.anim;
+        if (precisionRef.current[id] || anim !== 'full') {
+            container.textContent = nextText;
+            lastStringsRef.current[id] = nextText;
             return;
         }
-
-        if (container.children.length !== newStr.length) {
-            container.innerHTML = '';
-            [...newStr].forEach(char => {
+        if (container.children.length !== nextText.length) {
+            container.replaceChildren();
+            [...nextText].forEach((char) => {
                 const span = document.createElement('span');
                 span.style.display = 'inline-block';
-                span.innerText = char;
+                span.textContent = char;
                 container.appendChild(span);
             });
         }
-
-        [...newStr].forEach((char, i) => {
-            const span = container.children[i];
-            if (span.innerText !== char) {
-                gsap.to(span, {
-                    y: -15,
-                    opacity: 0,
-                    duration: 0.15,
-                    onComplete: () => {
-                        span.innerText = char;
-                        gsap.fromTo(span, 
-                            { y: 15, opacity: 0 }, 
-                            { y: 0, opacity: 1, duration: 0.2, ease: "back.out(1.7)" }
-                        );
-                    }
-                });
-            }
+        [...nextText].forEach((char, index) => {
+            const span = container.children[index];
+            if (!span || span.textContent === char) return;
+            gsap.to(span, {
+                y: -15,
+                opacity: 0,
+                duration: 0.15,
+                onComplete: () => {
+                    span.textContent = char;
+                    gsap.fromTo(span, { y: 15, opacity: 0 }, { y: 0, opacity: 1, duration: 0.2, ease: 'back.out(1.7)' });
+                },
+            });
         });
-        lastStringsRef.current[id] = newStr;
+        lastStringsRef.current[id] = nextText;
     }, []);
 
-    // The Main 50ms Update Loop
-    useEffect(() => {
-        const interval = setInterval(() => {
-            const currentParams = new URLSearchParams(window.location.search);
-            const devTime = currentParams.get('devt');
-            const devDay = currentParams.get('devd');
-            const animMode = currentParams.get('anim') || 'full';
-            const userParam = currentParams.get('u') || 'user1';
-            
-            let nowFull = new Date(Date.now() + timeOffsetRef.current);
-            const day = (devDay !== null) ? parseInt(devDay) : nowFull.getDay();
-            
-            let currentMs;
-            if (devTime) {
-                const p = devTime.split(':').map(Number);
-                currentMs = ((p[0] * 3600) + (p[1] * 60) + (p[2] || 0)) * 1000;
-            } else {
-                currentMs = (nowFull.getHours() * 3600 + nowFull.getMinutes() * 60 + nowFull.getSeconds()) * 1000 + nowFull.getMilliseconds();
+    useLayoutEffect(() => {
+        const classRoll = createTimerRoll();
+        const dayRoll = createTimerRoll();
+        rollsRef.current = { classRoll, dayRoll };
+        let lastFrame = performance.now();
+        let raf = 0;
+        let classNode = null;
+        let dayNode = null;
+
+        const paintMilliseconds = (container, roll, remainingMs, showMs, frameMs) => {
+            const animate = showMs && prefsRef.current.anim === 'full' && Number.isFinite(remainingMs);
+            if (!animate) {
+                if (roll.isActive()) roll.reset(container);
+                return false;
+            }
+            const described = describeRemaining(Math.max(0, remainingMs), true);
+            roll.update(container, described.text, Math.max(0, remainingMs), described.glyphs, {
+                animate: true,
+                frameMs,
+            });
+            return true;
+        };
+
+        const tick = (frameMs = 16) => {
+            classNode = classTimerRef.current;
+            dayNode = dayTimerRef.current;
+            const currentPrefs = prefsRef.current;
+            const { currentMs } = readNow(currentPrefs, timeOffsetRef.current);
+            const next = viewFrom(currentPrefs, timetableRef.current, timeOffsetRef.current, loadErrorRef.current);
+            const previous = viewRef.current;
+            if (previous.mode !== next.mode || previous.primary?.slot !== next.primary.slot) {
+                lastStringsRef.current.class = '';
+                lastStringsRef.current.day = '';
+                classRoll.reset(classNode);
             }
 
-            const currentMins = Math.floor(currentMs / 60000);
-            
-            let schedule = null;
-            if (day === 1) schedule = PERIODS_LONG;
-            else if (day === 2 || day === 3) schedule = PERIODS_HALF;
-            else if (day === 5) schedule = PERIODS_SHORT;
-            
-            if (!schedule) {
-                setStatusLabel((day === 0 || day === 6) ? "Weekend" : "Free Day");
-                updateRollingTimer(classTimerRef, "OFF", 'time-until-class', animMode);
-                document.title = (day === 0 || day === 6) ? "Weekend | potatogamer.uk" : "Free Day | potatogamer.uk";
-                return;
+            const heroSlot = next.primary.slot === 'day' ? 'day' : 'class';
+            const heroRemaining = next.primary.kind === 'countdown' ? next.primary.target - currentMs : null;
+            const heroText = primaryText(next, currentMs, precisionRef.current);
+            if (!paintMilliseconds(classNode, classRoll, heroRemaining, precisionRef.current[heroSlot], frameMs)) {
+                updateRollingTimer(classNode, heroText, heroSlot);
             }
 
-            const classes = USER_TIMETABLES[userParam]?.timetable[day] || {};
-            const endMs = timeToMins(schedule[schedule.length - 1].end) * 60000;
-            
-            updateRollingTimer(dayTimerRef, formatDiff(endMs - currentMs, precisionRef.current['time-until-day']), 'time-until-day', animMode);
-
-            let pIdx = schedule.findIndex(p => currentMins >= timeToMins(p.start) && currentMins < timeToMins(p.end));
-            let p = pIdx !== -1 ? schedule[pIdx] : null;
-            
-            if (p) {
-                updateRollingTimer(periodTimerRef, formatDiff((timeToMins(p.end) * 60000) - currentMs, precisionRef.current['time-until-period']), 'time-until-period', animMode);
-            } else {
-                updateRollingTimer(periodTimerRef, "--:--", 'time-until-period', animMode);
-            }
-
-            let active = (p && classes[p.id]) ? classes[p.id] : null;
-            let next = schedule.find(p => timeToMins(p.start) > currentMins && classes[p.id]);
-
-            if (active) {
-                let last = p;
-                for (let i = pIdx + 1; i < schedule.length; i++) {
-                    if (classes[schedule[i].id] === active) last = schedule[i]; else break;
+            if (next.secondary && dayNode) {
+                const dayRemaining = next.secondary.target - currentMs;
+                const dayText = formatDiff(dayRemaining, precisionRef.current.day);
+                if (!paintMilliseconds(dayNode, dayRoll, dayRemaining, precisionRef.current.day, frameMs)) {
+                    updateRollingTimer(dayNode, dayText, 'day');
                 }
-                const diff = (timeToMins(last.end) * 60000) - currentMs;
-                const diffText = formatDiff(diff, precisionRef.current['time-until-class']);
-                
-                setStatusLabel(`End of ${active}`);
-                updateRollingTimer(classTimerRef, diffText, 'time-until-class', animMode);
-                document.title = `${diffText} till ${active} ends | potatogamer.uk`;
-            } else if (next) {
-                const diff = (timeToMins(next.start) * 60000) - currentMs;
-                const diffText = formatDiff(diff, precisionRef.current['time-until-class']);
-                
-                setStatusLabel("Next Class");
-                updateRollingTimer(classTimerRef, diffText, 'time-until-class', animMode);
-                document.title = `${diffText} till ${classes[next.id]} starts | potatogamer.uk`;
-            } else {
-                setStatusLabel("School Finished");
-                updateRollingTimer(classTimerRef, "DONE", 'time-until-class', animMode);
-                document.title = "School Finished | potatogamer.uk";
+            } else if (dayRoll.isActive()) {
+                dayRoll.reset(dayNode);
             }
 
-            let up = active ? schedule.slice(pIdx + 1).find(p => classes[p.id] && classes[p.id] !== active) : next;
-            setPreviewLabel((up && classes[up.id]) ? `Next Up: ${classes[up.id]}` : "");
+            if (progressRef.current) {
+                progressRef.current.style.width = next.progress == null ? '0%' : `${next.progress * 100}%`;
+            }
 
-        }, 50);
+            const title = next.primary.kind === 'countdown'
+                ? `${heroText} · ${next.status} | potatogamer.uk`
+                : `${next.status} | potatogamer.uk`;
+            if (titleRef.current !== title) {
+                document.title = title;
+                titleRef.current = title;
+            }
 
-        return () => clearInterval(interval);
+            if (
+                previous.status !== next.status
+                || previous.preview !== next.preview
+                || previous.mode !== next.mode
+                || Boolean(previous.secondary) !== Boolean(next.secondary)
+                || previous.now !== next.now
+                || previous.weekday !== next.weekday
+                || (previous.progress == null) !== (next.progress == null)
+            ) {
+                if (next.secondary && !previous.secondary) lastStringsRef.current.day = '';
+                viewRef.current = next;
+                setView(next);
+            }
+        };
+
+        const loop = (now) => {
+            const frameMs = Math.min(100, Math.max(8, now - lastFrame));
+            lastFrame = now;
+            tick(frameMs);
+            raf = requestAnimationFrame(loop);
+        };
+
+        tickRef.current = tick;
+        tick(16);
+        raf = requestAnimationFrame(loop);
+        return () => {
+            cancelAnimationFrame(raf);
+            classRoll.reset(classNode);
+            dayRoll.reset(dayNode);
+            rollsRef.current = null;
+        };
     }, [updateRollingTimer]);
 
-    const togglePrecision = (id) => {
-        precisionRef.current[id] = !precisionRef.current[id];
-        if (id === 'time-until-class' && classTimerRef.current) classTimerRef.current.innerHTML = '';
-        if (id === 'time-until-period' && periodTimerRef.current) periodTimerRef.current.innerHTML = '';
-        if (id === 'time-until-day' && dayTimerRef.current) dayTimerRef.current.innerHTML = '';
+    useEffect(() => {
+        tickRef.current();
+    }, [timetable, loadError]);
+
+    useLayoutEffect(() => {
+        if (!view.secondary) return;
+        tickRef.current();
+    }, [view.secondary]);
+
+    const togglePrecision = useCallback((slot) => {
+        precisionRef.current[slot] = !precisionRef.current[slot];
+        const heroIsDay = viewRef.current.primary?.slot === 'day';
+        const useDayNode = slot === 'day' && !heroIsDay;
+        const node = useDayNode ? dayTimerRef.current : classTimerRef.current;
+        const roll = useDayNode ? rollsRef.current?.dayRoll : rollsRef.current?.classRoll;
+        if (roll) roll.reset(node);
+        else if (node) node.replaceChildren();
+        lastStringsRef.current[slot] = '';
+        tickRef.current();
+    }, []);
+
+    const toggleHero = useCallback(() => {
+        togglePrecision(viewRef.current.primary?.slot === 'day' ? 'day' : 'class');
+    }, [togglePrecision]);
+
+    const toggleDay = useCallback(() => togglePrecision('day'), [togglePrecision]);
+
+    const copyLink = async () => {
+        const url = window.location.href;
+        try {
+            await navigator.clipboard.writeText(url);
+        } catch {
+            const input = document.createElement('textarea');
+            input.value = url;
+            document.body.appendChild(input);
+            input.select();
+            document.execCommand('copy');
+            input.remove();
+        }
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1600);
     };
+
+    const devActive = Boolean(prefs.devTime) || (prefs.devDay !== '' && prefs.devDay != null);
 
     return (
         <>
-            <LoadingScreen isVisible={isLoading || isExiting} />
+            <LoadingScreen isVisible={isLoading} />
+            {prefs.theme === 'stars' && <Stars />}
 
-            {isStarsTheme && <Stars />}
-
-            <button 
-                id="settings-link" 
-                onClick={() => navigate(`/time/settings${window.location.search}`)} 
-                className="settings-btn" 
+            <button
+                type="button"
+                className="settings-btn"
+                onClick={() => navigate(`/time/settings${window.location.search}`)}
                 title="Settings"
             >
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="3"></circle>
-                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
                 </svg>
             </button>
 
-            <div className="container">
-                <div id="status-label" className="label">{statusLabel}</div>
-                <div 
-                    id="time-until-class" 
-                    className="clickable-timer" 
-                    ref={classTimerRef}
-                    onClick={() => togglePrecision('time-until-class')}
-                >
-                    00:00:00
-                </div>
-                <div id="next-class-preview">{previewLabel}</div>
+            <button type="button" className="share-btn" onClick={copyLink} title="Copy link">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                </svg>
+                {copied && <span className="copied-toast">Link copied</span>}
+            </button>
 
-                <div className="sub-timers">
-                    <div className="sub-box">
-                        <div 
-                            id="time-until-period" 
-                            className="sub-value clickable-timer"
-                            ref={periodTimerRef}
-                            onClick={() => togglePrecision('time-until-period')}
-                        >
-                            --:--
-                        </div>
-                        <div className="sub-label">End of Period</div>
-                    </div>
-                    <div className="sub-box">
-                        <div 
-                            id="time-until-day" 
-                            className="sub-value clickable-timer"
-                            ref={dayTimerRef}
-                            onClick={() => togglePrecision('time-until-day')}
-                        >
-                            --:--
-                        </div>
-                        <div className="sub-label">End of Day</div>
-                    </div>
+            <div className="container">
+                <div className="now-line">{view.weekday} · {view.now}</div>
+                <div className="label label-swap" key={view.status}>{view.status}</div>
+                <HeroTime timerRef={classTimerRef} onToggle={toggleHero} />
+                <div className={`progress-track${view.progress == null ? ' is-off' : ''}`} aria-hidden="true">
+                    <div className="progress-fill" ref={progressRef} />
                 </div>
+                <div id="next-class-preview">{view.preview}</div>
+                {view.secondary && <DayTime timerRef={dayTimerRef} onToggle={toggleDay} />}
             </div>
 
-            {isDevMode && <div id="test-indicator" style={{ display: 'block' }}>DEVELOPMENT OVERRIDE ACTIVE</div>}
+            {devActive && <div id="test-indicator">Development override active</div>}
         </>
     );
 }
