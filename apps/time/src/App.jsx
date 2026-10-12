@@ -1,7 +1,8 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
-import { clockMs, formatClock, formatDiff, timeToMs, WEEKDAYS } from './lib/time';
+import { clockMs, describeRemaining, formatClock, formatDiff, timeToMs, WEEKDAYS } from './lib/time';
 import { describeClock } from './lib/timetable';
+import { createTimerRoll } from './lib/rollingTimer';
 import { useTimePrefs } from './lib/useTimePrefs';
 import Stars from './Stars';
 import { LoadingScreen } from '@projects/ui';
@@ -102,6 +103,7 @@ export default function App({ navigate }) {
     const dayTimerRef = useRef(null);
     const progressRef = useRef(null);
     const tickRef = useRef(() => {});
+    const rollsRef = useRef(null);
 
     useLayoutEffect(() => {
         prefsRef.current = prefs;
@@ -171,7 +173,31 @@ export default function App({ navigate }) {
     }, []);
 
     useLayoutEffect(() => {
-        const tick = () => {
+        const classRoll = createTimerRoll();
+        const dayRoll = createTimerRoll();
+        rollsRef.current = { classRoll, dayRoll };
+        let lastFrame = performance.now();
+        let raf = 0;
+        let classNode = null;
+        let dayNode = null;
+
+        const paintMilliseconds = (container, roll, remainingMs, showMs, frameMs) => {
+            const animate = showMs && prefsRef.current.anim === 'full' && Number.isFinite(remainingMs);
+            if (!animate) {
+                if (roll.isActive()) roll.reset(container);
+                return false;
+            }
+            const described = describeRemaining(Math.max(0, remainingMs), true);
+            roll.update(container, described.text, Math.max(0, remainingMs), described.glyphs, {
+                animate: true,
+                frameMs,
+            });
+            return true;
+        };
+
+        const tick = (frameMs = 16) => {
+            classNode = classTimerRef.current;
+            dayNode = dayTimerRef.current;
             const currentPrefs = prefsRef.current;
             const { currentMs } = readNow(currentPrefs, timeOffsetRef.current);
             const next = viewFrom(currentPrefs, timetableRef.current, timeOffsetRef.current, loadErrorRef.current);
@@ -179,24 +205,32 @@ export default function App({ navigate }) {
             if (previous.mode !== next.mode || previous.primary?.slot !== next.primary.slot) {
                 lastStringsRef.current.class = '';
                 lastStringsRef.current.day = '';
-                classTimerRef.current?.replaceChildren();
+                classRoll.reset(classNode);
             }
 
             const heroSlot = next.primary.slot === 'day' ? 'day' : 'class';
-            updateRollingTimer(classTimerRef.current, primaryText(next, currentMs, precisionRef.current), heroSlot);
+            const heroRemaining = next.primary.kind === 'countdown' ? next.primary.target - currentMs : null;
+            const heroText = primaryText(next, currentMs, precisionRef.current);
+            if (!paintMilliseconds(classNode, classRoll, heroRemaining, precisionRef.current[heroSlot], frameMs)) {
+                updateRollingTimer(classNode, heroText, heroSlot);
+            }
 
-            if (next.secondary && dayTimerRef.current) {
-                const dayText = formatDiff(next.secondary.target - currentMs, precisionRef.current.day);
-                updateRollingTimer(dayTimerRef.current, dayText, 'day');
+            if (next.secondary && dayNode) {
+                const dayRemaining = next.secondary.target - currentMs;
+                const dayText = formatDiff(dayRemaining, precisionRef.current.day);
+                if (!paintMilliseconds(dayNode, dayRoll, dayRemaining, precisionRef.current.day, frameMs)) {
+                    updateRollingTimer(dayNode, dayText, 'day');
+                }
+            } else if (dayRoll.isActive()) {
+                dayRoll.reset(dayNode);
             }
 
             if (progressRef.current) {
                 progressRef.current.style.width = next.progress == null ? '0%' : `${next.progress * 100}%`;
             }
 
-            const hero = primaryText(next, currentMs, precisionRef.current);
             const title = next.primary.kind === 'countdown'
-                ? `${hero} · ${next.status} | potatogamer.uk`
+                ? `${heroText} · ${next.status} | potatogamer.uk`
                 : `${next.status} | potatogamer.uk`;
             if (titleRef.current !== title) {
                 document.title = title;
@@ -218,10 +252,22 @@ export default function App({ navigate }) {
             }
         };
 
+        const loop = (now) => {
+            const frameMs = Math.min(100, Math.max(8, now - lastFrame));
+            lastFrame = now;
+            tick(frameMs);
+            raf = requestAnimationFrame(loop);
+        };
+
         tickRef.current = tick;
-        tick();
-        const interval = setInterval(tick, 50);
-        return () => clearInterval(interval);
+        tick(16);
+        raf = requestAnimationFrame(loop);
+        return () => {
+            cancelAnimationFrame(raf);
+            classRoll.reset(classNode);
+            dayRoll.reset(dayNode);
+            rollsRef.current = null;
+        };
     }, [updateRollingTimer]);
 
     useEffect(() => {
@@ -235,10 +281,12 @@ export default function App({ navigate }) {
 
     const togglePrecision = useCallback((slot) => {
         precisionRef.current[slot] = !precisionRef.current[slot];
-        const node = slot === 'day' && viewRef.current.primary?.slot !== 'day'
-            ? dayTimerRef.current
-            : classTimerRef.current;
-        if (node) node.replaceChildren();
+        const heroIsDay = viewRef.current.primary?.slot === 'day';
+        const useDayNode = slot === 'day' && !heroIsDay;
+        const node = useDayNode ? dayTimerRef.current : classTimerRef.current;
+        const roll = useDayNode ? rollsRef.current?.dayRoll : rollsRef.current?.classRoll;
+        if (roll) roll.reset(node);
+        else if (node) node.replaceChildren();
         lastStringsRef.current[slot] = '';
         tickRef.current();
     }, []);

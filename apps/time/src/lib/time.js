@@ -18,15 +18,49 @@ export function formatHM(totalMs) {
     return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 }
 
-export function formatDiff(totalMs, showMs = false) {
-    if (!Number.isFinite(totalMs) || totalMs <= 0) return showMs ? '00:00:00.000' : '00:00:00';
-    const totalSeconds = Math.floor(totalMs / 1000);
+function glyph(char, kind, weight = 0, radix = 10) {
+    return { char, kind, weight, radix };
+}
+
+export function describeRemaining(totalMs, showMs = false) {
+    const zero = showMs ? '00:00:00.000' : '00:00:00';
+    if (!Number.isFinite(totalMs) || totalMs <= 0) {
+        return {
+            text: zero,
+            glyphs: [...zero].map((char) => glyph(char, char >= '0' && char <= '9' ? 'digit' : 'sep')),
+        };
+    }
     const ms = Math.floor(totalMs % 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const totalSeconds = Math.floor(totalMs / 1000);
     const seconds = totalSeconds % 60;
-    const base = `${hours > 0 ? `${hours}:` : ''}${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-    return showMs ? `${base}.${String(ms).padStart(3, '0')}` : base;
+    const minutes = Math.floor(totalSeconds / 60) % 60;
+    const hours = Math.floor(totalSeconds / 3600);
+    const glyphs = [];
+    const pushDigits = (value, length, unit, { tensRadix = 10 } = {}) => {
+        const chars = String(value).padStart(length, '0');
+        [...chars].forEach((char, index) => {
+            const place = chars.length - 1 - index;
+            const radix = place === 1 ? tensRadix : 10;
+            glyphs.push(glyph(char, 'digit', unit * (10 ** place), radix));
+        });
+    };
+    const pushSep = (char) => glyphs.push(glyph(char, 'sep'));
+    if (hours > 0) {
+        pushDigits(hours, String(hours).length, 3600000);
+        pushSep(':');
+    }
+    pushDigits(minutes, 2, 60000, { tensRadix: 6 });
+    pushSep(':');
+    pushDigits(seconds, 2, 1000, { tensRadix: 6 });
+    if (showMs) {
+        pushSep('.');
+        pushDigits(ms, 3, 1);
+    }
+    return { text: glyphs.map((item) => item.char).join(''), glyphs };
+}
+
+export function formatDiff(totalMs, showMs = false) {
+    return describeRemaining(totalMs, showMs).text;
 }
 
 export function formatClock(totalMs) {
