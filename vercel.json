@@ -1,13 +1,17 @@
 {
-  "rewrites": [
-    {
-      "source": "/time/(.*)",
-      "destination": "/time/index.html"
-    },
+  "redirects": [
     {
       "source": "/time",
-      "destination": "/time/index.html"
+      "destination": "https://time.potatogamer.uk/",
+      "permanent": true
     },
+    {
+      "source": "/time/:path*",
+      "destination": "https://time.potatogamer.uk/:path*",
+      "permanent": true
+    }
+  ],
+  "rewrites": [
     {
       "source": "/(.*)",
       "destination": "/index.html"
