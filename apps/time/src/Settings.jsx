@@ -150,7 +150,7 @@ export default function Settings({ navigate }) {
     };
 
     const goBack = () => {
-        navigate(`/time${window.location.search}`); 
+        navigate(`/${window.location.search}`); 
     };
 
     const handleExternalNavigation = (e, url) => {
