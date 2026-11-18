@@ -14,6 +14,16 @@
   "rewrites": [
     {
       "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "time.potatogamer.uk"
+        }
+      ],
+      "destination": "/time/index.html"
+    },
+    {
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ]
