@@ -1,30 +1,39 @@
 {
-  "redirects": [
+  "routes": [
     {
-      "source": "/time",
-      "destination": "https://time.potatogamer.uk/",
-      "permanent": true
+      "src": "^/time(?:/(.*))?$",
+      "status": 308,
+      "headers": {
+        "Location": "https://time.potatogamer.uk/$1"
+      }
     },
     {
-      "source": "/time/:path*",
-      "destination": "https://time.potatogamer.uk/:path*",
-      "permanent": true
-    }
-  ],
-  "rewrites": [
-    {
-      "source": "/(.*)",
+      "src": "^/(.*)$",
       "has": [
         {
           "type": "host",
           "value": "time.potatogamer.uk"
         }
       ],
-      "destination": "/time/index.html"
+      "dest": "/time/$1",
+      "continue": true
     },
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "handle": "filesystem"
+    },
+    {
+      "src": "^/(.*)$",
+      "has": [
+        {
+          "type": "host",
+          "value": "time.potatogamer.uk"
+        }
+      ],
+      "dest": "/time/index.html"
+    },
+    {
+      "src": "^/(.*)$",
+      "dest": "/index.html"
     }
   ]
 }
