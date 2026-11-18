@@ -262,7 +262,7 @@ export default function App({ navigate }) {
 
             <button 
                 id="settings-link" 
-                onClick={() => navigate(`/time/settings${window.location.search}`)} 
+                onClick={() => navigate(`/settings${window.location.search}`)} 
                 className="settings-btn" 
                 title="Settings"
             >
